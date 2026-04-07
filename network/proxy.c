@@ -12,16 +12,11 @@
     #include <arpa/inet.h>
     #include <unistd.h>
     #include <pthread.h> // Bibliothèque pour les threads sous Linux
+    #include <netinet/tcp.h> // Nécessaire pour TCP_NODELAY sous Linux
 #endif
 
 #define BUFFER_SIZE 1024
 #define REMOTE_PORT 6000 
-
-// Structure pour transmettre les données au thread
-typedef struct {
-    int sock;
-    struct sockaddr_in peer_addr;
-} thread_data_t;
 
 void init_sockets() {
 #ifdef _WIN32
@@ -33,13 +28,21 @@ void init_sockets() {
 #endif
 }
 
+void cleanup_socket(int sock) {
+#ifdef _WIN32
+    closesocket(sock);
+#else
+    close(sock);
+#endif
+}
+
 // Fonction de gestion de l'envoi des messages (exécutée dans un thread séparé)
 #ifdef _WIN32
 void send_thread(void* arg) {
 #else
 void* send_thread(void* arg) {
 #endif
-    thread_data_t* data = (thread_data_t*)arg;
+    int comm_sock = *(int*)arg; // Le socket connecté
     char buffer[BUFFER_SIZE];
 
     while (1) {
@@ -48,10 +51,11 @@ void* send_thread(void* arg) {
             buffer[strcspn(buffer, "\r\n")] = 0;
             
             if (strlen(buffer) > 0) {
-                int sent = sendto(data->sock, buffer, (int)strlen(buffer), 0, 
-                                  (struct sockaddr*)&data->peer_addr, sizeof(data->peer_addr));
+                // Avec TCP, on utilise send() au lieu de sendto()
+                int sent = send(comm_sock, buffer, (int)strlen(buffer), 0);
                 if (sent < 0) {
-                    printf("Erreur lors de l'envoi du message !\n");
+                    printf("\nErreur lors de l'envoi du message ! La connexion est peut-être coupée.\n");
+                    break; // Sortir si la connexion est perdue
                 } else {
                     printf("> Message envoyé !\n> ");
                     fflush(stdout);
@@ -73,76 +77,108 @@ int main(int argc, char *argv[]) {
     char *remote_ip = argv[1];
     init_sockets();
 
-    // 1. Création du socket UDP
-    int eth_sock = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP);
-    if (eth_sock < 0) {
-        perror("Échec de création du socket");
-        return 1;
-    }
-
-    // 2. Configuration de l'adresse locale (bind)
-    struct sockaddr_in my_addr;
-    my_addr.sin_family = AF_INET;
-    my_addr.sin_port = htons(REMOTE_PORT);
-    my_addr.sin_addr.s_addr = INADDR_ANY;
-
-    if (bind(eth_sock, (struct sockaddr*)&my_addr, sizeof(my_addr)) < 0) {
-#ifdef _WIN32
-        printf("Échec du bind. Erreur : %d\n", WSAGetLastError());
-#else
-        perror("Échec du bind");
-#endif
-        return 1;
-    }
-
-    // 3. Configuration de l'adresse distante (pair)
-    thread_data_t t_data;
-    t_data.sock = eth_sock;
-    t_data.peer_addr.sin_family = AF_INET;
-    t_data.peer_addr.sin_port = htons(REMOTE_PORT);
-    if (inet_pton(AF_INET, remote_ip, &t_data.peer_addr.sin_addr) <= 0) {
+    int comm_sock = -1; // Le socket qui sera utilisé pour communiquer
+    
+    // 1. Préparation de l'adresse du pair distant
+    struct sockaddr_in peer_addr;
+    peer_addr.sin_family = AF_INET;
+    peer_addr.sin_port = htons(REMOTE_PORT);
+    if (inet_pton(AF_INET, remote_ip, &peer_addr.sin_addr) <= 0) {
         printf("Adresse IP invalide !\n");
         return 1;
     }
 
-    printf("--- Cœur réseau démarré ---\n");
-    printf("Pair : %s:%d\n", remote_ip, REMOTE_PORT);
+    // 2. Tenter de se connecter en tant que Client
+    printf("Tentative de connexion à %s:%d...\n", remote_ip, REMOTE_PORT);
+    int temp_sock = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
+    
+    if (connect(temp_sock, (struct sockaddr*)&peer_addr, sizeof(peer_addr)) == 0) {
+        printf("Connecté avec succès en tant que CLIENT.\n");
+        comm_sock = temp_sock;
+    } else {
+        // La connexion a échoué (le pair n'est pas encore en ligne)
+        cleanup_socket(temp_sock);
+        printf("Le pair n'est pas prêt. Basculement en mode SERVEUR (en attente de connexion)...\n");
+
+        int listen_sock = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
+        
+        // Autoriser la réutilisation de l'adresse (SO_REUSEADDR)
+        int opt = 1;
+        setsockopt(listen_sock, SOL_SOCKET, SO_REUSEADDR, (char*)&opt, sizeof(opt));
+
+        struct sockaddr_in my_addr;
+        my_addr.sin_family = AF_INET;
+        my_addr.sin_port = htons(REMOTE_PORT);
+        my_addr.sin_addr.s_addr = INADDR_ANY;
+
+        if (bind(listen_sock, (struct sockaddr*)&my_addr, sizeof(my_addr)) < 0) {
+            perror("Échec du bind");
+            return 1;
+        }
+
+        if (listen(listen_sock, 1) < 0) {
+            perror("Échec de l'écoute (listen)");
+            return 1;
+        }
+
+        struct sockaddr_in client_addr;
+        socklen_t client_len = sizeof(client_addr);
+        comm_sock = accept(listen_sock, (struct sockaddr*)&client_addr, &client_len);
+        
+        if (comm_sock < 0) {
+            perror("Échec de l'acceptation (accept)");
+            return 1;
+        }
+        
+        printf("Un pair s'est connecté ! Connecté avec succès en tant que SERVEUR.\n");
+        cleanup_socket(listen_sock); // Plus besoin d'écouter d'autres connexions
+    }
+
+    // 3. OPTIMISATION : Désactiver l'algorithme de Nagle pour une latence minimale (Important pour le jeu)
+    int flag = 1;
+    if (setsockopt(comm_sock, IPPROTO_TCP, TCP_NODELAY, (char*)&flag, sizeof(int)) < 0) {
+        printf("Avertissement : Impossible de définir TCP_NODELAY.\n");
+    }
+
+    printf("--- Cœur réseau TCP démarré ---\n");
     printf("Tapez un message puis appuyez sur Entrée pour envoyer :\n> ");
     fflush(stdout);
 
-    // 4. Création d'un thread pour l'envoi des données (entrée clavier)
+    // 4. Création d'un thread pour l'envoi des données
 #ifdef _WIN32
-    _beginthread(send_thread, 0, &t_data);
+    _beginthread(send_thread, 0, &comm_sock);
 #else
     pthread_t thread_id;
-    pthread_create(&thread_id, NULL, send_thread, &t_data);
+    pthread_create(&thread_id, NULL, send_thread, &comm_sock);
 #endif
 
-    // 5. Boucle principale : réception des données
+    // 5. Boucle principale : réception des données TCP
     char recv_buffer[BUFFER_SIZE];
-    struct sockaddr_in from_addr;
-    int addr_len = sizeof(from_addr);
 
     while (1) {
-        int len = recvfrom(eth_sock, recv_buffer, BUFFER_SIZE - 1, 0, 
-                           (struct sockaddr*)&from_addr, &addr_len);
+        // Avec TCP, on utilise recv() au lieu de recvfrom()
+        int len = recv(comm_sock, recv_buffer, BUFFER_SIZE - 1, 0);
+        
         if (len > 0) {
             recv_buffer[len] = '\0';
-            printf("\n[REÇU de %s] : %s\n> ", inet_ntoa(from_addr.sin_addr), recv_buffer);
+            printf("\n[REÇU du pair] : %s\n> ", recv_buffer);
             fflush(stdout);
-        } else if (len < 0) {
-            // Éviter d'afficher des erreurs en boucle si le socket est non-bloquant
-#ifdef _WIN32
-            if (WSAGetLastError() != WSAEWOULDBLOCK) break;
-#endif
+        } else if (len == 0) {
+            // Un retour de 0 signifie que le pair a fermé la connexion de manière propre
+            printf("\nLa connexion a été fermée par le pair distant.\n");
+            break;
+        } else {
+            // Erreur de connexion (ex: coupure brutale)
+            printf("\nErreur de réception. Connexion perdue.\n");
+            break;
         }
     }
 
+    // 6. Nettoyage final
+    cleanup_socket(comm_sock);
 #ifdef _WIN32
-    closesocket(eth_sock);
     WSACleanup();
-#else
-    close(eth_sock);
 #endif
     return 0;
 }
+//  gcc proxy.c -o proxy.exe -lws2_32 (win)  gcc proxy.c -o proxy -lpthread(linux) ./proxy ip1 ou ip2
