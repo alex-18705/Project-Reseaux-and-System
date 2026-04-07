@@ -1,5 +1,8 @@
 # Python Project 2025–2026: MedievAIl BAIttle GenerAIl
 
+Source :
+https://drive.google.com/file/d/1BHxEBfnQlzLeh-AHwUvqT_n3qOcvhRAp/view?usp=drive_link
+https://drive.google.com/file/d/1T1PBgwUbtoPRrT4uYkOi8iOA9RJ1wf_O/view?usp=drive_link
 
 <details>
 <summary>📑 Contents</summary>
