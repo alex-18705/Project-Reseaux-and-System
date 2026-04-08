@@ -21,6 +21,8 @@ https://drive.google.com/file/d/1T1PBgwUbtoPRrT4uYkOi8iOA9RJ1wf_O/view?usp=drive
 
 
 ## Usage
+### Test Online
+- `python main.py testOnline`
 
 ### Battle Commands
 

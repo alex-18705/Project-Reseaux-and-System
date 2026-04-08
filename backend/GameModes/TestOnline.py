@@ -19,16 +19,17 @@ class TestOnline(GameMode) :
 
     def launch(self):
         #initialise
-        pass
+        print("Launching TestOnline")
 
     def gameLoop(self):
         #loop
-        pass
+        for i in range(5):
+            print("Game Loop")
 
 
     def end(self):
         #disconnect
-        pass
+        print("Ending TestOnline")
 
 
 

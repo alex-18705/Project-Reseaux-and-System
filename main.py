@@ -5,15 +5,6 @@ from backend.GameModes.Battle import Battle
 from backend.GameModes.TestOnline import TestOnline
 from backend.Utils.class_by_name import general_from_name, get_available_generals
 from backend.Utils.file_loader import load_mirrored_army_from_file, load_map_from_file
-from backend.Utils.Lanchester.lanchester import (
-    run_lanchester_dataset,
-    parse_range_expr,
-    parse_types_expr,
-    resolve_general_class,
-)
-from backend.Utils.plotters import plot_lanchester
-from backend.Utils.scenarios import get_available_scenarios
-from backend.Utils.tournament import run_tournament_cli
 from frontend.Terminal import Screen
 from frontend.Terminal.NoAffiche import NoAffiche
 
@@ -57,6 +48,12 @@ def main():
 
     # ==================== TestOnline ====================
     run_parser = subparsers.add_parser("testOnline", help="Test online")
+    run_parser.add_argument(
+        "--ticks", "-t", type=int, default=None,
+        help="Maximum ticks to run the battle (omit to run until end)"
+    )
+
+
 
     args = parser.parse_args()
 
@@ -104,8 +101,8 @@ def main():
 
 
 
-        # ==================== MODE:  TestOnline ====================
-        if args.mode == "testOnline":
+    # ==================== MODE:  TestOnline ====================
+    if args.mode == "testOnline":
             testOnline = TestOnline()
             testOnline.max_tick = args.ticks
             gameMode = testOnline
