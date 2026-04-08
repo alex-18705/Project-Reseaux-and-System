@@ -31,21 +31,19 @@ class GameMode(ABC) :
 
     @property
     def army1(self):
-        return self.__army1
+        pass
 
     @army1.setter
-    def army1(self, value : Army):
-        value.gameMode = self
-        self.__army1 = value
+    def army1(self, value: Army):
+        pass
 
     @property
     def army2(self):
-        return self.__army2
+        pass
 
     @army2.setter
     def army2(self, value: Army):
-        value.gameMode = self
-        self.__army2 = value
+        pass
 
     @property
     def map(self):

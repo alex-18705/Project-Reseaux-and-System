@@ -7,8 +7,10 @@ from backend.Class.Units.Knight import Knight
 from backend.Class.Units.Pikeman import Pikeman
 from backend.Class.Units.Crossbowman import Crossbowman
 
+# client1 envoie les ordres de sont général -> client2 execute les ordres et envoie l'état du monde -> client1
 
-class Battle(GameMode):
+
+class Online(GameMode):
 
     def __init__(self):
         super().__init__()
@@ -17,25 +19,26 @@ class Battle(GameMode):
         self.tick_delay = 1.0  # seconds between simulation ticks
         self.frame_delay = 0.05  # sleep duration when not using pygame
         self.verbose = True
+        self.list_army=[]
 
     @property
     def army1(self):
-        return self.__army1
+        return self.list_army[0]
 
     @army1.setter
     def army1(self, value):
         value.gameMode = self
-        self.__army1 = value
+        self.list_army.append(value)
 
     @property
     def army2(self):
-        return self.__army2
+        return self.list_army[1]
 
     @army2.setter
     def army2(self, value):
         value.gameMode = self
-        self.__army2 = value
-
+        self.list_army.append(value)
+        
     def to_dict(self):
         """Serialize battle state to dictionary for saving."""
         # Serialize units with their IDs
