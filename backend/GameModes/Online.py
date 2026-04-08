@@ -183,8 +183,21 @@ class Online(GameMode):
         if hasattr(self.affichage, "shutdown"):
             self.affichage.shutdown()
 
+    def message_recieve(self):
+        return False
+
     def run(self):
-        self.army1.fight(self.map, otherArmy=self.army2)
+        if self.message_recieve() :
+            #update units
+            #update map
+            pass
+
+        targets = self.army1.general.getTargets(self.map, self.army2)
+
+        orders = self.testTargets(targets, map, otherArmy)
+
+        self.execOrder(orders, otherArmy)
+
         self.army2.fight(self.map, otherArmy=self.army1)
         self.save()
         self.tick += 1

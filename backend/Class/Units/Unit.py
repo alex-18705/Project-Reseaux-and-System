@@ -6,7 +6,7 @@ class Unit():
 
 
     def __init__(self, max_hp: int, attack: int, armor: int,
-                 speed: int, range_: int, reload_time: int, ligne_of_sight:int,position: tuple[float]= None, size :float=1, classes=None, bonuses=None):
+                 speed: int, range_: int, reload_time: int, ligne_of_sight:int,position: tuple[float,float]= None, size :float=1, classes=None, bonuses=None):
 
 
         self.__id = str(uuid.uuid4())

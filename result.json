@@ -1,0 +1,1140 @@
+{
+  "py/object": "backend.Class.Army.Army",
+  "gameMode": null,
+  "general": null,
+  "units": [
+    {
+      "py/object": "backend.Class.Units.Crossbowman.Crossbowman",
+      "_Unit__id": "6b4cfbeb-f47b-4005-8b71-89df95e426d8",
+      "army": {
+        "py/id": 0
+      },
+      "max_hp": 35,
+      "hp": 35,
+      "_attack": 6,
+      "armor": 0,
+      "speed": 1,
+      "range": 5,
+      "position": {
+        "py/tuple": [
+          83,
+          3
+        ]
+      },
+      "size": 1,
+      "classes": [
+        "Archer"
+      ],
+      "bonuses": {
+        "Spear": 3,
+        "Building": 0
+      },
+      "reload_time": 2,
+      "cooldown": 0,
+      "line_of_sight": 7,
+      "last_attacker": null,
+      "last_attacked": null
+    },
+    {
+      "py/object": "backend.Class.Units.Pikeman.Pikeman",
+      "_Unit__id": "ee33c718-a035-4ba9-8113-cc9503a9a171",
+      "army": {
+        "py/id": 0
+      },
+      "max_hp": 55,
+      "hp": 55,
+      "_attack": 4,
+      "armor": 0,
+      "speed": 1,
+      "range": 1,
+      "position": {
+        "py/tuple": [
+          82,
+          3
+        ]
+      },
+      "size": 1,
+      "classes": [
+        "Infantry",
+        "Spear"
+      ],
+      "bonuses": {
+        "Cavalry": 10
+      },
+      "reload_time": 3,
+      "cooldown": 0,
+      "line_of_sight": 6,
+      "last_attacker": null,
+      "last_attacked": null
+    },
+    {
+      "py/object": "backend.Class.Units.Knight.Knight",
+      "_Unit__id": "ceaeaf9d-ba5d-4761-831a-a635ff4f859a",
+      "army": {
+        "py/id": 0
+      },
+      "max_hp": 100,
+      "hp": 100,
+      "_attack": 10,
+      "armor": 2,
+      "speed": 2,
+      "range": 1,
+      "position": {
+        "py/tuple": [
+          81,
+          3
+        ]
+      },
+      "size": 1,
+      "classes": [
+        "Cavalry"
+      ],
+      "bonuses": {
+        "Infantry": 2
+      },
+      "reload_time": 2,
+      "cooldown": 0,
+      "line_of_sight": 4,
+      "last_attacker": null,
+      "last_attacked": null
+    },
+    {
+      "py/object": "backend.Class.Units.Crossbowman.Crossbowman",
+      "_Unit__id": "0c31f05c-aef4-4776-ad33-e09957235ec8",
+      "army": {
+        "py/id": 0
+      },
+      "max_hp": 35,
+      "hp": 35,
+      "_attack": 6,
+      "armor": 0,
+      "speed": 1,
+      "range": 5,
+      "position": {
+        "py/tuple": [
+          83,
+          4
+        ]
+      },
+      "size": 1,
+      "classes": [
+        "Archer"
+      ],
+      "bonuses": {
+        "Spear": 3,
+        "Building": 0
+      },
+      "reload_time": 2,
+      "cooldown": 0,
+      "line_of_sight": 7,
+      "last_attacker": null,
+      "last_attacked": null
+    },
+    {
+      "py/object": "backend.Class.Units.Knight.Knight",
+      "_Unit__id": "5ebb2f8d-eb34-48a4-bf45-57f0262afa20",
+      "army": {
+        "py/id": 0
+      },
+      "max_hp": 100,
+      "hp": 100,
+      "_attack": 10,
+      "armor": 2,
+      "speed": 2,
+      "range": 1,
+      "position": {
+        "py/tuple": [
+          81,
+          4
+        ]
+      },
+      "size": 1,
+      "classes": [
+        "Cavalry"
+      ],
+      "bonuses": {
+        "Infantry": 2
+      },
+      "reload_time": 2,
+      "cooldown": 0,
+      "line_of_sight": 4,
+      "last_attacker": null,
+      "last_attacked": null
+    },
+    {
+      "py/object": "backend.Class.Units.Crossbowman.Crossbowman",
+      "_Unit__id": "1ca24fed-dbde-406c-996f-a6cb62bee20a",
+      "army": {
+        "py/id": 0
+      },
+      "max_hp": 35,
+      "hp": 35,
+      "_attack": 6,
+      "armor": 0,
+      "speed": 1,
+      "range": 5,
+      "position": {
+        "py/tuple": [
+          83,
+          5
+        ]
+      },
+      "size": 1,
+      "classes": [
+        "Archer"
+      ],
+      "bonuses": {
+        "Spear": 3,
+        "Building": 0
+      },
+      "reload_time": 2,
+      "cooldown": 0,
+      "line_of_sight": 7,
+      "last_attacker": null,
+      "last_attacked": null
+    },
+    {
+      "py/object": "backend.Class.Units.Pikeman.Pikeman",
+      "_Unit__id": "5458eda5-d75e-40ea-9563-2759ee9c4eee",
+      "army": {
+        "py/id": 0
+      },
+      "max_hp": 55,
+      "hp": 55,
+      "_attack": 4,
+      "armor": 0,
+      "speed": 1,
+      "range": 1,
+      "position": {
+        "py/tuple": [
+          82,
+          5
+        ]
+      },
+      "size": 1,
+      "classes": [
+        "Infantry",
+        "Spear"
+      ],
+      "bonuses": {
+        "Cavalry": 10
+      },
+      "reload_time": 3,
+      "cooldown": 0,
+      "line_of_sight": 6,
+      "last_attacker": null,
+      "last_attacked": null
+    },
+    {
+      "py/object": "backend.Class.Units.Knight.Knight",
+      "_Unit__id": "578d2b3f-2997-4d91-b44a-a0f09c1c6bf1",
+      "army": {
+        "py/id": 0
+      },
+      "max_hp": 100,
+      "hp": 100,
+      "_attack": 10,
+      "armor": 2,
+      "speed": 2,
+      "range": 1,
+      "position": {
+        "py/tuple": [
+          81,
+          5
+        ]
+      },
+      "size": 1,
+      "classes": [
+        "Cavalry"
+      ],
+      "bonuses": {
+        "Infantry": 2
+      },
+      "reload_time": 2,
+      "cooldown": 0,
+      "line_of_sight": 4,
+      "last_attacker": null,
+      "last_attacked": null
+    },
+    {
+      "py/object": "backend.Class.Units.Crossbowman.Crossbowman",
+      "_Unit__id": "b8d53df5-5e73-4338-b441-f6851cef620d",
+      "army": {
+        "py/id": 0
+      },
+      "max_hp": 35,
+      "hp": 35,
+      "_attack": 6,
+      "armor": 0,
+      "speed": 1,
+      "range": 5,
+      "position": {
+        "py/tuple": [
+          83,
+          6
+        ]
+      },
+      "size": 1,
+      "classes": [
+        "Archer"
+      ],
+      "bonuses": {
+        "Spear": 3,
+        "Building": 0
+      },
+      "reload_time": 2,
+      "cooldown": 0,
+      "line_of_sight": 7,
+      "last_attacker": null,
+      "last_attacked": null
+    },
+    {
+      "py/object": "backend.Class.Units.Knight.Knight",
+      "_Unit__id": "d77a7237-c577-4632-bfdd-e2049c806b49",
+      "army": {
+        "py/id": 0
+      },
+      "max_hp": 100,
+      "hp": 100,
+      "_attack": 10,
+      "armor": 2,
+      "speed": 2,
+      "range": 1,
+      "position": {
+        "py/tuple": [
+          81,
+          6
+        ]
+      },
+      "size": 1,
+      "classes": [
+        "Cavalry"
+      ],
+      "bonuses": {
+        "Infantry": 2
+      },
+      "reload_time": 2,
+      "cooldown": 0,
+      "line_of_sight": 4,
+      "last_attacker": null,
+      "last_attacked": null
+    },
+    {
+      "py/object": "backend.Class.Units.Crossbowman.Crossbowman",
+      "_Unit__id": "162d4b84-5489-4fbd-823f-02bddabca25d",
+      "army": {
+        "py/id": 0
+      },
+      "max_hp": 35,
+      "hp": 35,
+      "_attack": 6,
+      "armor": 0,
+      "speed": 1,
+      "range": 5,
+      "position": {
+        "py/tuple": [
+          83,
+          7
+        ]
+      },
+      "size": 1,
+      "classes": [
+        "Archer"
+      ],
+      "bonuses": {
+        "Spear": 3,
+        "Building": 0
+      },
+      "reload_time": 2,
+      "cooldown": 0,
+      "line_of_sight": 7,
+      "last_attacker": null,
+      "last_attacked": null
+    },
+    {
+      "py/object": "backend.Class.Units.Pikeman.Pikeman",
+      "_Unit__id": "8221fae2-bda0-4e65-a878-1e61c007bccd",
+      "army": {
+        "py/id": 0
+      },
+      "max_hp": 55,
+      "hp": 55,
+      "_attack": 4,
+      "armor": 0,
+      "speed": 1,
+      "range": 1,
+      "position": {
+        "py/tuple": [
+          82,
+          7
+        ]
+      },
+      "size": 1,
+      "classes": [
+        "Infantry",
+        "Spear"
+      ],
+      "bonuses": {
+        "Cavalry": 10
+      },
+      "reload_time": 3,
+      "cooldown": 0,
+      "line_of_sight": 6,
+      "last_attacker": null,
+      "last_attacked": null
+    },
+    {
+      "py/object": "backend.Class.Units.Knight.Knight",
+      "_Unit__id": "28a7b57f-32fc-46e2-92c0-d615cd5f18e8",
+      "army": {
+        "py/id": 0
+      },
+      "max_hp": 100,
+      "hp": 100,
+      "_attack": 10,
+      "armor": 2,
+      "speed": 2,
+      "range": 1,
+      "position": {
+        "py/tuple": [
+          81,
+          7
+        ]
+      },
+      "size": 1,
+      "classes": [
+        "Cavalry"
+      ],
+      "bonuses": {
+        "Infantry": 2
+      },
+      "reload_time": 2,
+      "cooldown": 0,
+      "line_of_sight": 4,
+      "last_attacker": null,
+      "last_attacked": null
+    },
+    {
+      "py/object": "backend.Class.Units.Elephant.Elephant",
+      "_Unit__id": "8280c5cc-9c81-4953-b8ca-33d31ab26270",
+      "army": {
+        "py/id": 0
+      },
+      "max_hp": 300,
+      "hp": 300,
+      "_attack": 14,
+      "armor": 2,
+      "speed": 1,
+      "range": 1,
+      "position": {
+        "py/tuple": [
+          78,
+          7
+        ]
+      },
+      "size": 2,
+      "classes": [
+        "Cavalry"
+      ],
+      "bonuses": {
+        "Castle": 7
+      },
+      "reload_time": 2,
+      "cooldown": 0,
+      "line_of_sight": 8,
+      "last_attacker": null,
+      "last_attacked": null
+    },
+    {
+      "py/object": "backend.Class.Units.Crossbowman.Crossbowman",
+      "_Unit__id": "2edffa31-9617-4396-9eff-6324b078a7f5",
+      "army": {
+        "py/id": 0
+      },
+      "max_hp": 35,
+      "hp": 35,
+      "_attack": 6,
+      "armor": 0,
+      "speed": 1,
+      "range": 5,
+      "position": {
+        "py/tuple": [
+          83,
+          8
+        ]
+      },
+      "size": 1,
+      "classes": [
+        "Archer"
+      ],
+      "bonuses": {
+        "Spear": 3,
+        "Building": 0
+      },
+      "reload_time": 2,
+      "cooldown": 0,
+      "line_of_sight": 7,
+      "last_attacker": null,
+      "last_attacked": null
+    },
+    {
+      "py/object": "backend.Class.Units.Knight.Knight",
+      "_Unit__id": "e9d01e3e-5f58-47bb-a314-6a54b0547c29",
+      "army": {
+        "py/id": 0
+      },
+      "max_hp": 100,
+      "hp": 100,
+      "_attack": 10,
+      "armor": 2,
+      "speed": 2,
+      "range": 1,
+      "position": {
+        "py/tuple": [
+          81,
+          8
+        ]
+      },
+      "size": 1,
+      "classes": [
+        "Cavalry"
+      ],
+      "bonuses": {
+        "Infantry": 2
+      },
+      "reload_time": 2,
+      "cooldown": 0,
+      "line_of_sight": 4,
+      "last_attacker": null,
+      "last_attacked": null
+    },
+    {
+      "py/object": "backend.Class.Units.Monk.Monk",
+      "_Unit__id": "ddd98a5a-2e32-432f-bb9a-609fce9fefd1",
+      "army": {
+        "py/id": 0
+      },
+      "max_hp": 30,
+      "hp": 30,
+      "_attack": 4,
+      "armor": 0,
+      "speed": 1,
+      "range": 9,
+      "position": {
+        "py/tuple": [
+          86,
+          9
+        ]
+      },
+      "size": 1,
+      "classes": [],
+      "bonuses": {},
+      "reload_time": 62,
+      "cooldown": 0,
+      "line_of_sight": 11,
+      "last_attacker": null,
+      "last_attacked": null,
+      "convert_range": 0
+    },
+    {
+      "py/object": "backend.Class.Units.Crossbowman.Crossbowman",
+      "_Unit__id": "51eede86-dad6-462e-b508-f528952aa0a3",
+      "army": {
+        "py/id": 0
+      },
+      "max_hp": 35,
+      "hp": 35,
+      "_attack": 6,
+      "armor": 0,
+      "speed": 1,
+      "range": 5,
+      "position": {
+        "py/tuple": [
+          83,
+          9
+        ]
+      },
+      "size": 1,
+      "classes": [
+        "Archer"
+      ],
+      "bonuses": {
+        "Spear": 3,
+        "Building": 0
+      },
+      "reload_time": 2,
+      "cooldown": 0,
+      "line_of_sight": 7,
+      "last_attacker": null,
+      "last_attacked": null
+    },
+    {
+      "py/object": "backend.Class.Units.Pikeman.Pikeman",
+      "_Unit__id": "a196e850-6665-4165-a10f-082df5b90606",
+      "army": {
+        "py/id": 0
+      },
+      "max_hp": 55,
+      "hp": 55,
+      "_attack": 4,
+      "armor": 0,
+      "speed": 1,
+      "range": 1,
+      "position": {
+        "py/tuple": [
+          82,
+          9
+        ]
+      },
+      "size": 1,
+      "classes": [
+        "Infantry",
+        "Spear"
+      ],
+      "bonuses": {
+        "Cavalry": 10
+      },
+      "reload_time": 3,
+      "cooldown": 0,
+      "line_of_sight": 6,
+      "last_attacker": null,
+      "last_attacked": null
+    },
+    {
+      "py/object": "backend.Class.Units.Knight.Knight",
+      "_Unit__id": "f4170e30-1563-4696-bf1d-56185a073329",
+      "army": {
+        "py/id": 0
+      },
+      "max_hp": 100,
+      "hp": 100,
+      "_attack": 10,
+      "armor": 2,
+      "speed": 2,
+      "range": 1,
+      "position": {
+        "py/tuple": [
+          81,
+          9
+        ]
+      },
+      "size": 1,
+      "classes": [
+        "Cavalry"
+      ],
+      "bonuses": {
+        "Infantry": 2
+      },
+      "reload_time": 2,
+      "cooldown": 0,
+      "line_of_sight": 4,
+      "last_attacker": null,
+      "last_attacked": null
+    },
+    {
+      "py/object": "backend.Class.Units.Crossbowman.Crossbowman",
+      "_Unit__id": "1430a5c6-83aa-4c19-87f0-81d389c721ed",
+      "army": {
+        "py/id": 0
+      },
+      "max_hp": 35,
+      "hp": 35,
+      "_attack": 6,
+      "armor": 0,
+      "speed": 1,
+      "range": 5,
+      "position": {
+        "py/tuple": [
+          83,
+          10
+        ]
+      },
+      "size": 1,
+      "classes": [
+        "Archer"
+      ],
+      "bonuses": {
+        "Spear": 3,
+        "Building": 0
+      },
+      "reload_time": 2,
+      "cooldown": 0,
+      "line_of_sight": 7,
+      "last_attacker": null,
+      "last_attacked": null
+    },
+    {
+      "py/object": "backend.Class.Units.Knight.Knight",
+      "_Unit__id": "d5a8e837-b96c-43f9-a6be-075a05611898",
+      "army": {
+        "py/id": 0
+      },
+      "max_hp": 100,
+      "hp": 100,
+      "_attack": 10,
+      "armor": 2,
+      "speed": 2,
+      "range": 1,
+      "position": {
+        "py/tuple": [
+          81,
+          10
+        ]
+      },
+      "size": 1,
+      "classes": [
+        "Cavalry"
+      ],
+      "bonuses": {
+        "Infantry": 2
+      },
+      "reload_time": 2,
+      "cooldown": 0,
+      "line_of_sight": 4,
+      "last_attacker": null,
+      "last_attacked": null
+    },
+    {
+      "py/object": "backend.Class.Units.Crossbowman.Crossbowman",
+      "_Unit__id": "64d06af0-8bd0-4743-ad82-3180d1324e90",
+      "army": {
+        "py/id": 0
+      },
+      "max_hp": 35,
+      "hp": 35,
+      "_attack": 6,
+      "armor": 0,
+      "speed": 1,
+      "range": 5,
+      "position": {
+        "py/tuple": [
+          83,
+          11
+        ]
+      },
+      "size": 1,
+      "classes": [
+        "Archer"
+      ],
+      "bonuses": {
+        "Spear": 3,
+        "Building": 0
+      },
+      "reload_time": 2,
+      "cooldown": 0,
+      "line_of_sight": 7,
+      "last_attacker": null,
+      "last_attacked": null
+    },
+    {
+      "py/object": "backend.Class.Units.Pikeman.Pikeman",
+      "_Unit__id": "fe991334-31ad-4a4d-8ffd-81c9ea77b703",
+      "army": {
+        "py/id": 0
+      },
+      "max_hp": 55,
+      "hp": 55,
+      "_attack": 4,
+      "armor": 0,
+      "speed": 1,
+      "range": 1,
+      "position": {
+        "py/tuple": [
+          82,
+          11
+        ]
+      },
+      "size": 1,
+      "classes": [
+        "Infantry",
+        "Spear"
+      ],
+      "bonuses": {
+        "Cavalry": 10
+      },
+      "reload_time": 3,
+      "cooldown": 0,
+      "line_of_sight": 6,
+      "last_attacker": null,
+      "last_attacked": null
+    },
+    {
+      "py/object": "backend.Class.Units.Knight.Knight",
+      "_Unit__id": "bb1452b3-0c4e-4315-bf31-838cb50dafbb",
+      "army": {
+        "py/id": 0
+      },
+      "max_hp": 100,
+      "hp": 100,
+      "_attack": 10,
+      "armor": 2,
+      "speed": 2,
+      "range": 1,
+      "position": {
+        "py/tuple": [
+          81,
+          11
+        ]
+      },
+      "size": 1,
+      "classes": [
+        "Cavalry"
+      ],
+      "bonuses": {
+        "Infantry": 2
+      },
+      "reload_time": 2,
+      "cooldown": 0,
+      "line_of_sight": 4,
+      "last_attacker": null,
+      "last_attacked": null
+    },
+    {
+      "py/object": "backend.Class.Units.Elephant.Elephant",
+      "_Unit__id": "51999433-5aff-471b-8733-9b10f22a8ab9",
+      "army": {
+        "py/id": 0
+      },
+      "max_hp": 300,
+      "hp": 300,
+      "_attack": 14,
+      "armor": 2,
+      "speed": 1,
+      "range": 1,
+      "position": {
+        "py/tuple": [
+          78,
+          11
+        ]
+      },
+      "size": 2,
+      "classes": [
+        "Cavalry"
+      ],
+      "bonuses": {
+        "Castle": 7
+      },
+      "reload_time": 2,
+      "cooldown": 0,
+      "line_of_sight": 8,
+      "last_attacker": null,
+      "last_attacked": null
+    },
+    {
+      "py/object": "backend.Class.Units.Crossbowman.Crossbowman",
+      "_Unit__id": "0721e911-0710-4a71-badb-45b3544976a5",
+      "army": {
+        "py/id": 0
+      },
+      "max_hp": 35,
+      "hp": 35,
+      "_attack": 6,
+      "armor": 0,
+      "speed": 1,
+      "range": 5,
+      "position": {
+        "py/tuple": [
+          83,
+          12
+        ]
+      },
+      "size": 1,
+      "classes": [
+        "Archer"
+      ],
+      "bonuses": {
+        "Spear": 3,
+        "Building": 0
+      },
+      "reload_time": 2,
+      "cooldown": 0,
+      "line_of_sight": 7,
+      "last_attacker": null,
+      "last_attacked": null
+    },
+    {
+      "py/object": "backend.Class.Units.Knight.Knight",
+      "_Unit__id": "99eac82d-73db-4cb2-acae-f7fe7cacb29d",
+      "army": {
+        "py/id": 0
+      },
+      "max_hp": 100,
+      "hp": 100,
+      "_attack": 10,
+      "armor": 2,
+      "speed": 2,
+      "range": 1,
+      "position": {
+        "py/tuple": [
+          81,
+          12
+        ]
+      },
+      "size": 1,
+      "classes": [
+        "Cavalry"
+      ],
+      "bonuses": {
+        "Infantry": 2
+      },
+      "reload_time": 2,
+      "cooldown": 0,
+      "line_of_sight": 4,
+      "last_attacker": null,
+      "last_attacked": null
+    },
+    {
+      "py/object": "backend.Class.Units.Crossbowman.Crossbowman",
+      "_Unit__id": "8cf6c43f-6813-49c8-b565-79d223e2fb52",
+      "army": {
+        "py/id": 0
+      },
+      "max_hp": 35,
+      "hp": 35,
+      "_attack": 6,
+      "armor": 0,
+      "speed": 1,
+      "range": 5,
+      "position": {
+        "py/tuple": [
+          83,
+          13
+        ]
+      },
+      "size": 1,
+      "classes": [
+        "Archer"
+      ],
+      "bonuses": {
+        "Spear": 3,
+        "Building": 0
+      },
+      "reload_time": 2,
+      "cooldown": 0,
+      "line_of_sight": 7,
+      "last_attacker": null,
+      "last_attacked": null
+    },
+    {
+      "py/object": "backend.Class.Units.Pikeman.Pikeman",
+      "_Unit__id": "e97808b9-7552-4df8-8fba-e4a61473e3e8",
+      "army": {
+        "py/id": 0
+      },
+      "max_hp": 55,
+      "hp": 55,
+      "_attack": 4,
+      "armor": 0,
+      "speed": 1,
+      "range": 1,
+      "position": {
+        "py/tuple": [
+          82,
+          13
+        ]
+      },
+      "size": 1,
+      "classes": [
+        "Infantry",
+        "Spear"
+      ],
+      "bonuses": {
+        "Cavalry": 10
+      },
+      "reload_time": 3,
+      "cooldown": 0,
+      "line_of_sight": 6,
+      "last_attacker": null,
+      "last_attacked": null
+    },
+    {
+      "py/object": "backend.Class.Units.Knight.Knight",
+      "_Unit__id": "96736af9-eb88-4639-8889-51256a2015fc",
+      "army": {
+        "py/id": 0
+      },
+      "max_hp": 100,
+      "hp": 100,
+      "_attack": 10,
+      "armor": 2,
+      "speed": 2,
+      "range": 1,
+      "position": {
+        "py/tuple": [
+          81,
+          13
+        ]
+      },
+      "size": 1,
+      "classes": [
+        "Cavalry"
+      ],
+      "bonuses": {
+        "Infantry": 2
+      },
+      "reload_time": 2,
+      "cooldown": 0,
+      "line_of_sight": 4,
+      "last_attacker": null,
+      "last_attacked": null
+    },
+    {
+      "py/object": "backend.Class.Units.Crossbowman.Crossbowman",
+      "_Unit__id": "dc2be6cb-719a-4920-929a-cfa8cc47108f",
+      "army": {
+        "py/id": 0
+      },
+      "max_hp": 35,
+      "hp": 35,
+      "_attack": 6,
+      "armor": 0,
+      "speed": 1,
+      "range": 5,
+      "position": {
+        "py/tuple": [
+          83,
+          14
+        ]
+      },
+      "size": 1,
+      "classes": [
+        "Archer"
+      ],
+      "bonuses": {
+        "Spear": 3,
+        "Building": 0
+      },
+      "reload_time": 2,
+      "cooldown": 0,
+      "line_of_sight": 7,
+      "last_attacker": null,
+      "last_attacked": null
+    },
+    {
+      "py/object": "backend.Class.Units.Knight.Knight",
+      "_Unit__id": "54eb33ed-be7b-4327-93c8-d89829ed0316",
+      "army": {
+        "py/id": 0
+      },
+      "max_hp": 100,
+      "hp": 100,
+      "_attack": 10,
+      "armor": 2,
+      "speed": 2,
+      "range": 1,
+      "position": {
+        "py/tuple": [
+          81,
+          14
+        ]
+      },
+      "size": 1,
+      "classes": [
+        "Cavalry"
+      ],
+      "bonuses": {
+        "Infantry": 2
+      },
+      "reload_time": 2,
+      "cooldown": 0,
+      "line_of_sight": 4,
+      "last_attacker": null,
+      "last_attacked": null
+    },
+    {
+      "py/object": "backend.Class.Units.Crossbowman.Crossbowman",
+      "_Unit__id": "d69d20c6-f5dc-4cd0-9270-21a66e578b69",
+      "army": {
+        "py/id": 0
+      },
+      "max_hp": 35,
+      "hp": 35,
+      "_attack": 6,
+      "armor": 0,
+      "speed": 1,
+      "range": 5,
+      "position": {
+        "py/tuple": [
+          83,
+          15
+        ]
+      },
+      "size": 1,
+      "classes": [
+        "Archer"
+      ],
+      "bonuses": {
+        "Spear": 3,
+        "Building": 0
+      },
+      "reload_time": 2,
+      "cooldown": 0,
+      "line_of_sight": 7,
+      "last_attacker": null,
+      "last_attacked": null
+    },
+    {
+      "py/object": "backend.Class.Units.Pikeman.Pikeman",
+      "_Unit__id": "e42a9b4e-3aeb-4151-b770-fc52007193a4",
+      "army": {
+        "py/id": 0
+      },
+      "max_hp": 55,
+      "hp": 55,
+      "_attack": 4,
+      "armor": 0,
+      "speed": 1,
+      "range": 1,
+      "position": {
+        "py/tuple": [
+          82,
+          15
+        ]
+      },
+      "size": 1,
+      "classes": [
+        "Infantry",
+        "Spear"
+      ],
+      "bonuses": {
+        "Cavalry": 10
+      },
+      "reload_time": 3,
+      "cooldown": 0,
+      "line_of_sight": 6,
+      "last_attacker": null,
+      "last_attacked": null
+    },
+    {
+      "py/object": "backend.Class.Units.Knight.Knight",
+      "_Unit__id": "0adfc517-7492-4863-a9e4-e6d523c8c466",
+      "army": {
+        "py/id": 0
+      },
+      "max_hp": 100,
+      "hp": 100,
+      "_attack": 10,
+      "armor": 2,
+      "speed": 2,
+      "range": 1,
+      "position": {
+        "py/tuple": [
+          81,
+          15
+        ]
+      },
+      "size": 1,
+      "classes": [
+        "Cavalry"
+      ],
+      "bonuses": {
+        "Infantry": 2
+      },
+      "reload_time": 2,
+      "cooldown": 0,
+      "line_of_sight": 4,
+      "last_attacker": null,
+      "last_attacked": null
+    }
+  ]
+}
