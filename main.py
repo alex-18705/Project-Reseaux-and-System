@@ -55,6 +55,9 @@ def main():
         help="Use pygame graphical display if available"
     )
 
+    # ==================== TestOnline ====================
+    run_parser = subparsers.add_parser("testOnline", help="Test online")
+
     args = parser.parse_args()
 
     gameMode = None
@@ -98,44 +101,10 @@ def main():
         gameMode.gameLoop()
         gameMode.end()
 
-        # ==================== RUN ====================
-        run_parser = subparsers.add_parser("run", help="Run a new battle")
 
-        run_parser.add_argument(
-            "--ticks", "-t", type=int, default=None,
-            help="Maximum ticks to run the battle (omit to run until end)"
-        )
 
-        run_parser.add_argument(
-            "--general1", "-g1", type=str, default=None,
-            help=f"Comma-separated list of generals.  Available: {', '.join(get_available_generals())}"
-        )
-        run_parser.add_argument(
-            "--general2", "-g2", type=str, default=None,
-            help=f"Comma-separated list of generals.  Available: {', '.join(get_available_generals())}"
-        )
-        run_parser.add_argument(
-            "--army_file", type=str,
-            help="path of the army repartition file"
-        )
-        run_parser.add_argument(
-            "--map_file", type=str,
-            help="path of the map file"
-        )
-        run_parser.add_argument(
-            "--curses", action="store_true", dest="use_curses",
-            help="Use curses-based terminal display if available"
-        )
-        run_parser.add_argument(
-            "--pygame", action="store_true", dest="use_pygame",
-            help="Use pygame graphical display if available"
-        )
 
-        args = parser.parse_args()
-
-        gameMode = None
-
-        # ==================== MODE:  RUN ====================
+        # ==================== MODE:  TestOnline ====================
         if args.mode == "testOnline":
             testOnline = TestOnline()
             testOnline.max_tick = args.ticks
@@ -143,11 +112,11 @@ def main():
 
             affichage = NoAffiche()
 
-            gameMode.affichage = affichage
+            testOnline.affichage = affichage
 
-            gameMode.launch()
-            gameMode.gameLoop()
-            gameMode.end()
+            testOnline.launch()
+            testOnline.gameLoop()
+            testOnline.end()
 
 
 
