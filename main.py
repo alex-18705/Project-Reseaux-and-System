@@ -48,7 +48,7 @@ def main():
     )
 
     # ==================== ONLINE ====================
-    run_parser = subparsers.add_parser("run", help="Run a new battle")
+    run_parser = subparsers.add_parser("online", help="Run a new battle")
 
     run_parser.add_argument(
         "--ticks", "-t", type=int, default=None,
