@@ -2,6 +2,7 @@ import argparse
 import os
 
 from backend.GameModes.Battle import Battle
+from backend.GameModes.Online import Online
 from backend.GameModes.TestOnline import TestOnline
 from backend.Utils.class_by_name import general_from_name, get_available_generals
 from backend.Utils.file_loader import load_mirrored_army_from_file, load_map_from_file
@@ -61,7 +62,7 @@ def main():
 
     # ==================== MODE:  RUN ====================
     if args.mode == "run":
-        battle = Battle()
+        battle = Online()
         battle.max_tick = args.ticks
         gameMode = battle
 

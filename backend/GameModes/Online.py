@@ -183,6 +183,12 @@ class Online(GameMode):
         if hasattr(self.affichage, "shutdown"):
             self.affichage.shutdown()
 
+    def __run(self):
+        self.army1.fight(self.map, otherArmy=self.army2)
+        self.army2.fight(self.map, otherArmy=self.army1)
+        self.save()
+        self.tick += 1
+
     def launch(self):
         self.affichage.initialiser()
 
@@ -240,10 +246,7 @@ class Online(GameMode):
                                 self.affichage.unit_previous_positions[unit.id] = unit.position
 
                     # Execute one battle tick
-                    self.army1.fight(self.map, otherArmy=self.army2)
-                    self.army2.fight(self.map, otherArmy=self.army1)
-                    self.save()
-                    self.tick += 1
+                    self.__run()
                     last_tick_time = current_time
                     
                     if getattr(self, "verbose", True):
