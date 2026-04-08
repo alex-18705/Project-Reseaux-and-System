@@ -90,7 +90,6 @@ if __name__ == "__main__":
     if not net.connect():
         exit()
 
-    # Gửi message mỗi 2 giây
     def sender_loop():
         count = 0
         while net.is_connected:
@@ -101,7 +100,6 @@ if __name__ == "__main__":
 
     threading.Thread(target=sender_loop, daemon=True).start()
 
-    # Nhận message
     while True:
         updates = net.get_updates()
         for msg in updates:
