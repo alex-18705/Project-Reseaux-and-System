@@ -1,12 +1,13 @@
-from abc import ABC, abstractmethod
 
 from backend.Class.Army import Army
 from backend.Class.Map import Map
+from backend.GameModes.GameMode import GameMode
 from frontend.Affichage import Affichage
 
 
-class TestOnline(ABC) :
+class TestOnline(GameMode) :
     def __init__(self):
+        super().__init__()
         self.__army1 = None
         self.__army2 = None
         self.__affichage = None
@@ -15,17 +16,16 @@ class TestOnline(ABC) :
 
 
 
-    @abstractmethod
+
     def launch(self):
         #initialise
         pass
 
-    @abstractmethod
     def gameLoop(self):
         #loop
         pass
 
-    @abstractmethod
+
     def end(self):
         #disconnect
         pass
@@ -34,9 +34,6 @@ class TestOnline(ABC) :
 
 
 
-
-
-    @abstractmethod
     def save(self):
         pass
 
