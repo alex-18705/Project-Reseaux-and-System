@@ -31,7 +31,8 @@ class TestOnline(GameMode) :
         #disconnect
         print("Ending TestOnline")
 
-
+    def run(self):
+        pass
 
 
 
