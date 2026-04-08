@@ -219,17 +219,13 @@ class Army:
                         enemy.hp-=unit.attack
 
     def fight(self, map: Map, otherArmy):
-        # print("me",len(self.living_units()), len(otherArmy.living_units()))
 
         targets = self.general.getTargets(map, otherArmy)
-        #print("me", len(self.living_units()), len(otherArmy.living_units()))
-        #print("targets" ,targets)
+
         orders = self.testTargets(targets, map, otherArmy)
-        #print("me", len(self.living_units()), len(otherArmy.living_units()))
-        #print("orders", orders)
+
         self.execOrder(orders, otherArmy)
-        #print("me", len(self.living_units()), len(otherArmy.living_units()))
-        #print("executer")
+
 
 
     def test_collision(self,vector,unit, object):
