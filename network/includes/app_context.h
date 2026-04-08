@@ -28,8 +28,8 @@ typedef struct {
 } Peer;
 
 typedef struct {
-    socket_t listen_fd;
-    socket_t python_fd;
+    socket_t listen_fd; // server socket for peers
+    socket_t python_fd; // socket for Python connection
     Peer peers[MAX_PEERS];
     int running;
 } AppContext;
