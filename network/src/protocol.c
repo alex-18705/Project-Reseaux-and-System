@@ -36,9 +36,9 @@ static int extract_type(const char *json_str, char *type_buf, size_t buf_size) {
     return 0;
 }
 
-/* precise target of message*/
-static int extract_target_fd(const char *json_str, int *target_fd) {
-    const char *p = strstr(json_str, "\"target_fd\"");
+/* precise target peer identifier of message*/
+static int extract_target_peer_id(const char *json_str, char *peer_id_buf, size_t buf_size) {
+    const char *p = strstr(json_str, "\"target_peer_id\"");
     if (!p) {
         return -1;
     }
@@ -47,11 +47,25 @@ static int extract_target_fd(const char *json_str, int *target_fd) {
         return -1;
     }
     p++;
-    while (*p == ' ' || *p == '\t') p++;
-
-    if (sscanf(p, "%d", target_fd) != 1) {
+    while (*p == ' ' || *p == '\t') {
+        p++;
+    }
+    if (*p != '"') {
         return -1;
     }
+    p++;
+
+    const char *end = strchr(p, '"');
+    if (!end) {
+        return -1;
+    }
+
+    size_t len = (size_t)(end - p);
+    if (len >= buf_size) {
+        len = buf_size - 1;
+    }
+    strncpy(peer_id_buf, p, len);
+    peer_id_buf[len] = '\0';
     return 0;
 }
 
@@ -118,14 +132,13 @@ int parse_message(const char *json_str, Message *msg) {
     }
 
     memset(msg, 0, sizeof(Message));
-    msg->target_fd = -1;
 
     if (extract_type(json_str, msg->type, sizeof(msg->type)) != 0) {
         return -1;
     }
 
     if (strcmp(msg->type, "SEND_TO") == 0) {
-        if (extract_target_fd(json_str, &msg->target_fd) != 0) {
+        if (extract_target_peer_id(json_str, msg->target_peer_id, sizeof(msg->target_peer_id)) != 0) {
             return -1;
         }
         if (extract_event_json(json_str, msg->event_json, sizeof(msg->event_json)) != 0) {
@@ -149,18 +162,18 @@ int parse_message(const char *json_str, Message *msg) {
 }
 
 /*Build message C to Python when peer connected*/
-void build_peer_connected(char *buffer, int fd, const char *ip, int port) {
-    sprintf(buffer, "{\"type\":\"PEER_CONNECTED\",\"payload\":{\"from_fd\":%d,\"ip\":\"%s\",\"port\":%d}}", fd, ip ? ip : "", port);
+void build_peer_connected(char *buffer, const char *peer_id, const char *ip, int port) {
+    sprintf(buffer, "{\"type\":\"PEER_CONNECTED\",\"payload\":{\"peer_id\":\"%s\",\"ip\":\"%s\",\"port\":%d}}", peer_id ? peer_id : "", ip ? ip : "", port);
 }
 
 /* Build message C to Python when peer disconnected*/
-void build_peer_disconnected(char *buffer, int fd) {
-    sprintf(buffer,"{\"type\":\"PEER_DISCONNECTED\",\"payload\":{\"from_fd\":%d}}",fd);
+void build_peer_disconnected(char *buffer, const char *peer_id) {
+    sprintf(buffer,"{\"type\":\"PEER_DISCONNECTED\",\"payload\":{\"peer_id\":\"%s\"}}", peer_id ? peer_id : "");
 }
 
 /*Build message C to Python when peer send message*/
-void build_peer_message(char *buffer, int from_fd, const char *event_json) {
-    sprintf(buffer, "{\"type\":\"PEER_MESSAGE\",\"payload\":{\"from_fd\":%d,\"event\":%s}}", from_fd, event_json ? event_json : "{}" );
+void build_peer_message(char *buffer, const char *peer_id, const char *event_json) {
+    sprintf(buffer, "{\"type\":\"PEER_MESSAGE\",\"payload\":{\"peer_id\":\"%s\",\"event\":%s}}", peer_id ? peer_id : "", event_json ? event_json : "{}" );
 }
 
 /* Build message C to peer*/

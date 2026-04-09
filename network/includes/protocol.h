@@ -2,11 +2,12 @@
 #define PROTOCOL_H
 
 #define MSG_TYPE_SIZE 32
+#define PEER_ID_SIZE 64
 #define JSON_SIZE 4096
 
 typedef struct {
     char type[MSG_TYPE_SIZE]; 
-    int target_fd;              
+    char target_peer_id[PEER_ID_SIZE];
     char event_json[JSON_SIZE]; // JSON string for the event payload
 } Message;
 
@@ -15,7 +16,7 @@ typedef struct {
  * {
  *   "type": "SEND_TO",
  *   "payload": {
- *     "target_fd": 7,
+ *     "target_peer_id": "peer-1",
  *     "event": { ... }
  *   }
  * }
@@ -28,7 +29,7 @@ int parse_message(const char *json_str, Message *msg);
  *   {
  *     "type": "PEER_CONNECTED",
  *     "payload": {
- *       "from_fd": <fd>,
+ *       "peer_id": "<peer-id>",
  *       "ip": "<ip>",
  *       "port": <port>
  *     }
@@ -38,7 +39,7 @@ int parse_message(const char *json_str, Message *msg);
  *   {
  *     "type": "PEER_DISCONNECTED",
  *     "payload": {
- *       "from_fd": <fd>
+ *       "peer_id": "<peer-id>"
  *     }
  *   }
  *
@@ -46,7 +47,7 @@ int parse_message(const char *json_str, Message *msg);
  *   {
  *     "type": "PEER_MESSAGE",
  *     "payload": {
- *       "from_fd": <fd>,
+ *       "peer_id": "<peer-id>",
  *       "event": { ... }
  *     }
  *   }
@@ -59,9 +60,9 @@ int parse_message(const char *json_str, Message *msg);
  *     }
  *   }
 */
-void build_peer_connected(char *buffer, int fd, const char *ip, int port);
-void build_peer_disconnected(char *buffer, int fd);
-void build_peer_message(char *buffer, int from_fd, const char *event_json);
+void build_peer_connected(char *buffer, const char *peer_id, const char *ip, int port);
+void build_peer_disconnected(char *buffer, const char *peer_id);
+void build_peer_message(char *buffer, const char *peer_id, const char *event_json);
 void build_game_event(char *buffer, const char *event_json);
 
 #endif

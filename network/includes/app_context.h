@@ -22,14 +22,14 @@ typedef int socket_t;
 #define BUF_SIZE 1024
 
 typedef struct {
-    socket_t fd;
     struct sockaddr_in addr;
+    socklen_t addr_len;
     int active;
 } Peer;
 
 typedef struct {
-    socket_t listen_fd; // server socket for peers
-    socket_t python_fd; // socket for Python connection
+    socket_t listen_fd; // UDP socket used to receive/send peer datagrams
+    socket_t python_fd; // local IPC socket for Python connection
     Peer peers[MAX_PEERS];
     int running;
 } AppContext;
