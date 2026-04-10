@@ -124,7 +124,8 @@ class NetworkBridge:
         Structure du datagramme :
         {
             "size": <taille en octets>
-            "ip" : <ip destination>
+            "dest" : <ip destination>
+            "dep" : <ip depart>
             "seq":     <numéro de séquence entier croissant>,
             "type":    <type du message>,
             "payload": <données utiles>
@@ -144,7 +145,8 @@ class NetworkBridge:
 
         message = {
             "size": len(payload_dict),
-            "ip": destination,
+            "dest": destination,
+            "dep": None , #recuperer l'ip de la machine
             "seq":     self._seq_out,
             "type":    msg_type,
             "payload": payload_dict

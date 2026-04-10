@@ -26,8 +26,8 @@ class Online(GameMode):
         self.verbose = True
         self.my_army = None
         self.othersArmy = []
-        self.computer_id = str(uuid.uuid4())
         self.network_bridge = NetworkBridge()
+        self.know_ip= set()
 
     @property
     def army1(self):
@@ -222,13 +222,16 @@ class Online(GameMode):
 
     def run(self):
         messages = self.network_bridge.get_updates()
+        for message in messages:
+            #get ip, ajouter dans know_ip si deja pas présente
+            #
+            pass
 
 
         all = self.flat()
         self.army1.fight(self.map, otherArmy=all)
-        all.fight(self.map, otherArmy=self.army1)
-        self.save()
-        self.tick += 1
+        self.update_army(all)
+
 
     def launch(self):
         self.affichage.initialiser()
