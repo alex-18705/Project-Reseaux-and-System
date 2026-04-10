@@ -1,6 +1,8 @@
 import json
 import os
 from pathlib import Path
+
+from backend.Class.Army import Army
 from backend.GameModes.GameMode import GameMode
 from backend.Utils.class_by_name import general_from_name
 from backend.Class.Units.Knight import Knight
@@ -19,25 +21,52 @@ class Online(GameMode):
         self.tick_delay = 1.0  # seconds between simulation ticks
         self.frame_delay = 0.05  # sleep duration when not using pygame
         self.verbose = True
-        self.list_army=[]
+        self.my_army = None
+        self.othersArmy = []
 
     @property
     def army1(self):
-        return self.list_army[0]
+        return self.my_army
 
     @army1.setter
     def army1(self, value):
         value.gameMode = self
-        self.list_army.append(value)
+        self.my_army=value
 
     @property
     def army2(self):
-        return self.list_army[1]
+        return self.othersArmy[0]
 
     @army2.setter
     def army2(self, value):
         value.gameMode = self
-        self.list_army.append(value)
+        self.othersArmy.append(value)
+
+    def add_army(self,value):
+        value.gameMode = self
+        self.othersArmy.append(value)
+
+    def remove_army(self,value):
+        self.othersArmy.remove(value)
+
+    def flat(self):
+        new = Army()
+        list_units = []
+        for a in self.othersArmy:
+            new.general = a.general
+            new.gameMode = a.gameMode
+            list_units.append(a.units)
+        new.units = [u for sublist in list_units for u in sublist]
+        return new
+
+    def update_army(self,global_army):
+        for a in self.othersArmy:
+            for u in a.units:
+                if u not in global_army.units: a.units.remove(u)
+
+
+
+
         
     def to_dict(self):
         """Serialize battle state to dictionary for saving."""
@@ -187,17 +216,7 @@ class Online(GameMode):
         return False
 
     def run(self):
-        if self.message_recieve() :
-            #update units
-            #update map
-            pass
-
-        targets = self.army1.general.getTargets(self.map, self.army2)
-
-        orders = self.testTargets(targets, map, otherArmy)
-
-        self.execOrder(orders, otherArmy)
-
+        self.army1.fight(self.map, otherArmy=self.flat())
         self.army2.fight(self.map, otherArmy=self.army1)
         self.save()
         self.tick += 1
