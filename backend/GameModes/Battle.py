@@ -183,12 +183,18 @@ class Battle(GameMode):
     def launch(self):
         self.affichage.initialiser()
 
+    def continue_condition(self):
+        return (
+                    not self.army1.isEmpty() and
+                    not self.army2.isEmpty() and
+                    (self.max_tick is None or self.tick < self.max_tick)
+            )
+
     def run(self):
         self.army1.fight(self.map, otherArmy=self.army2)
         self.army2.fight(self.map, otherArmy=self.army1)
         self.save()
         self.tick += 1
-
 
     def save(self):
         pass
