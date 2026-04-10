@@ -29,9 +29,17 @@ typedef struct {
 } Peer;
 
 typedef struct {
-    socket_t listen_fd; // UDP socket used to receive/send peer datagrams
+    socket_t peer_fd; // UDP socket used to receive/send peer datagrams
     socket_t python_fd; // local IPC socket for Python connection
-    Peer peers[MAX_PEERS];
+    
+    struct sockaddr_in python_addr; // Address for Python IPC
+    socklen_t python_addr_len;
+    int has_python_addr;
+
+    struct sockaddr_in peer_addr; // Address for peer
+    socket_t peer_addr_len;
+    int has_peer_addr;
+
     int running;
 } AppContext;
 
