@@ -1,5 +1,6 @@
 import json
 import os
+import uuid
 from pathlib import Path
 
 from backend.Class.Army import Army
@@ -8,6 +9,8 @@ from backend.Utils.class_by_name import general_from_name
 from backend.Class.Units.Knight import Knight
 from backend.Class.Units.Pikeman import Pikeman
 from backend.Class.Units.Crossbowman import Crossbowman
+from network.network_api import NetworkBridge
+
 
 # client1 envoie les ordres de sont général -> client2 execute les ordres et envoie l'état du monde -> client1
 
@@ -23,6 +26,8 @@ class Online(GameMode):
         self.verbose = True
         self.my_army = None
         self.othersArmy = []
+        self.network_bridge = NetworkBridge()
+        self.know_ip= set()
 
     @property
     def army1(self):
@@ -216,14 +221,21 @@ class Online(GameMode):
         return False
 
     def run(self):
+        messages = self.network_bridge.get_updates()
+        for message in messages:
+            #get ip, ajouter dans know_ip si deja pas présente
+            #
+            pass
+
+
         all = self.flat()
         self.army1.fight(self.map, otherArmy=all)
-        all.fight(self.map, otherArmy=self.army1)
-        self.save()
-        self.tick += 1
+        self.update_army(all)
+
 
     def launch(self):
         self.affichage.initialiser()
+        self.network_bridge.connect()
 
     def save(self):
         pass
