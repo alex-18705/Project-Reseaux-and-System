@@ -216,8 +216,9 @@ class Online(GameMode):
         return False
 
     def run(self):
-        self.army1.fight(self.map, otherArmy=self.flat())
-        self.army2.fight(self.map, otherArmy=self.army1)
+        all = self.flat()
+        self.army1.fight(self.map, otherArmy=all)
+        all.fight(self.map, otherArmy=self.army1)
         self.save()
         self.tick += 1
 
