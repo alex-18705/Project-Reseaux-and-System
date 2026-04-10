@@ -21,6 +21,10 @@ class GameMode(ABC) :
     def run(self):
         pass
 
+    @abstractmethod
+    def continue_condition(self):
+        pass
+
     def gameLoop(self):
         import time
         use_pygame = getattr(self.affichage, "uses_pygame", False)
@@ -45,11 +49,7 @@ class GameMode(ABC) :
 
         while running:
             # Check if battle should continue
-            battle_continues = (
-                    not self.army1.isEmpty() and
-                    not self.army2.isEmpty() and
-                    (self.max_tick is None or self.tick < self.max_tick)
-            )
+            battle_continues = self.stop_condition()
             paused = False
             if hasattr(self.affichage, "is_paused") and callable(getattr(self.affichage, "is_paused")):
                 try:
