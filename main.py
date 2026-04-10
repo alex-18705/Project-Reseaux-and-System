@@ -96,6 +96,10 @@ def main():
     if args.mode == "online":
         gameMode = Online()
 
+        if args.join : gameMode.know_ip.add(args.join)
+
+        print(gameMode.know_ip)
+
         map_obj = load_map_from_file(args.map_file)
         gameMode.my_army = load_army_from_file(args.army_file)
 
