@@ -27,8 +27,8 @@ class Unit():
         self.cooldown = 0 #le temps necessaire qu'il reste à attendre pour la prochaine attaque
         self.line_of_sight = ligne_of_sight
 
-        self.last_attacker = None
-        self.last_attacked =None
+        self.last_attacker_id = None
+        self.last_attacked_id =None
 
     @property
     def attack(self):

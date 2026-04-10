@@ -11,9 +11,10 @@ a= Knight((0,0))
 
 
 
-json_data = jsonpickle.dumps(a)
+json_data = jsonpickle.dumps(army1)
 
 b = jsonpickle.loads(json_data)
 
+print(b.living_units_id())
 print(json_data)
 print(a,b, a==b)
