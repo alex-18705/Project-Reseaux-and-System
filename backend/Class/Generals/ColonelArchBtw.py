@@ -15,9 +15,6 @@ class ColonelArchBtw(General) :
         enemy_units = otherArmy.living_units()
         for unit in self.army.living_units() :
             target = None
-            #if unit.last_attacked and unit.last_attacked.is_alive() :
-            #    targets.append((unit, unit.last_attacked))
-            #else :
             if len(otherArmy.living_units()) > 40 :
                 if unit.position is None:
                     continue
@@ -63,7 +60,7 @@ class ColonelArchBtw(General) :
                         #    target = self.enemy_in_range(unit, crossbowmans)
                         # else:
                         target = self.enemy_in_range(unit, enemy_units)
-                        if isinstance(unit.last_attacker, Pikeman):
+                        if isinstance(otherArmy.get_unit_by_id(unit.last_attacker_id), Pikeman):
                             crossbowmans = [e for e in enemy_units if isinstance(e, Crossbowman)]
                             target = self.enemy_in_range(unit, crossbowmans)
                     elif isinstance(unit, Elephant):
@@ -77,10 +74,8 @@ class ColonelArchBtw(General) :
                     if target is not None:
                         targets.append((unit, target))
                     else:
-
-                        last_attacker = getattr(unit, "last_attacker", None)
-                        if last_attacker in enemy_units:
-                            targets.append((unit, last_attacker))
+                        if unit.last_attacker_id in otherArmy.living_units_id():
+                            targets.append((unit, otherArmy.get_unit_by_id(unit.last_attacker_id)))
                         else:
 
                             target = min(
@@ -92,12 +87,12 @@ class ColonelArchBtw(General) :
                                 targets.append((unit, target))
 
                 else:
-                    if unit.cooldown > 40 and unit.last_attacked is not None:
+                    if unit.cooldown > 40 and unit.last_attacked_id is not None:
 
-                        if unit.last_attacked is "conversion":
-                            unit.last_attacked = max(self.army.living_units(),
-                                                     key=lambda allie: self.__distance_sq(unit, allie))
-                        target = unit.last_attacked
+                        if unit.last_attacked_id is "conversion":
+                            unit.last_attacked_id = max(self.army.living_units(),
+                                                     key=lambda allie: self.__distance_sq(unit, allie)).id
+                        target = otherArmy.get_unit_by_id(unit.last_attacked_id)
 
                         monks = [e for e in enemy_units if isinstance(e, Monk)]
                         if monks:

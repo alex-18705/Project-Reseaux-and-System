@@ -18,9 +18,9 @@ class CaptainBraindead(General):
 
         for unit in self.army.living_units():
 
-            last_attacker = getattr(unit, "last_attacker", None)
-            if last_attacker in enemy_units:
-                targets.append((unit, last_attacker))
+
+            if unit.last_attacker_id in otherArmy.living_units_id():
+                targets.append((unit, otherArmy.get_unit_by_id(unit.last_attacker_id)))
             else :
 
             # no recent attacker: engage closest enemy in line of sight (simplified to nearest distance)

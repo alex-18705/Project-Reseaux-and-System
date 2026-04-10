@@ -3,7 +3,7 @@ from backend.Class.Units.Unit import Unit
 
 
 class Crossbowman(Unit):
-    def __init__(self, position: tuple[float]):
+    def __init__(self, position: tuple[float, float]):
         # longer range, slower reload, decent attack
         super().__init__(35, attack=6, armor=0,
                          speed=1, range_=5, reload_time=2, ligne_of_sight=7,position=position, classes=["Archer"], bonuses={"Spear": 3, "Building": 0},)
