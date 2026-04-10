@@ -16,7 +16,6 @@
 #include "protocol.h"
 
 
-
 /*
  * when a new peer connects, accept the connection, add to peer list, and notify Python
  */
@@ -49,8 +48,13 @@ void handle_peer_data(AppContext *ctx) {
     socklen_t addr_len = sizeof(src_addr);
 
     int r = recvfrom(ctx->peer_fd, buffer, sizeof(buffer), 0, (struct sockaddr *)&src_addr, &addr_len);
-    if (r <= 0) {
+    if (r < 0) {
         stop("recvfrom peer");
+    }
+
+    if (r == 0) {
+        printf("[C] Peer closed connection\n");
+        return;
     }
 
     printf("[C] recv from peer: %d bytes from %s:%d\n",
@@ -85,8 +89,13 @@ void handle_python_data(AppContext *ctx) {
     struct sockaddr_in src_addr ;
     socklen_t addr_len = sizeof(src_addr);
     int r = recvfrom(ctx->python_fd, buffer, sizeof(buffer), 0, (struct sockaddr*)&src_addr, &addr_len);
-    if (r<=0){
+    if (r<0){
         stop ("recvfrom python");
+    }
+
+    if (r == 0) {
+        printf("[C] Python closed connection\n");
+        return;
     }
 
     printf("[C] recv from python: %d bytes from %s:%d\n",
@@ -97,6 +106,14 @@ void handle_python_data(AppContext *ctx) {
     ctx->python_addr = src_addr;
     ctx->python_addr_len = addr_len;
     ctx->has_python_addr = 1;
+
+    /* Registration packet sent by NetworkBridge.connect():
+     * keep python_addr, but do not forward it to the remote proxy.
+     */
+    if (r == 1 && buffer[0] == '\n') {
+        printf("[C] python registration packet received, not forwarding\n");
+        return;
+    }
 
     if (!ctx->has_peer_addr){
         printf("[C] Peer address unknown, dropping python packet\n");

@@ -2,6 +2,8 @@ import socket
 import json
 import threading
 import queue
+import subprocess
+import time 
 
 # ============================================================
 #   NetworkBridge — Pont réseau Python ↔ Proxy C (UDP)
@@ -24,11 +26,15 @@ _TYPES_SEQUENCES = {"SYNC_UPDATE"}
 
 
 class NetworkBridge:
-    def __init__(self, host='127.0.0.1', port=5000):
+    def __init__(self, host='127.0.0.1', port=5000, auto_start = False, proxy_cmd = None):
         self.host = host
         self.port = port
         self.sock = None
         self.is_connected = False
+
+        self.auto_start = auto_start
+        self.proxy_cmd = proxy_cmd
+        self.proxy_process = None
 
         # File d'attente thread-safe
         # Sépare le thread réseau de la boucle principale du jeu
@@ -50,7 +56,12 @@ class NetworkBridge:
         self.sock.settimeout(1.0)
         self.server_addr = (self.host, self.port)
         self.is_connected = True
-
+        
+        """Démarrage du program C"""
+        if self.auto_start and self.proxy_cmd:
+            self.proxy_process = subprocess.Popen(self.proxy_cmd)
+            time.sleep(1.0)
+        
         # Premier paquet pour que le Proxy C enregistre notre port éphémère
         self.sock.sendto(b"\n", self.server_addr)
 
@@ -180,6 +191,18 @@ class NetworkBridge:
         timeout → puis on ferme le socket (évite WinError 10038).
         """
         self.is_connected = False   # Signal au thread de s'arrêter
+        
+        # Arrete Process C
+        if self.proxy_process:
+            try:
+                self.proxy_process.terminate()
+                self.proxy_process.wait(timeout=2)
+            except Exception:
+                try:
+                    self.proxy_process.kill()
+                except Exception:
+                    pass
+            
         if self.sock:
             try:
                 self.sock.close()
