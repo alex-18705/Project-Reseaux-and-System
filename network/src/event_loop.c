@@ -13,12 +13,11 @@
 
 void run_event_loop(AppContext *ctx) {
     fd_set readfds;
-    int max_fd;;
-
     while (ctx->running) {
+        int max_fd;
         FD_ZERO(&readfds);
 
-        int max_fd = 0;
+        max_fd = 0;
 
         // follow listen_fd for peer connections and python_fd for Python messages
         FD_SET(ctx->peer_fd, &readfds);

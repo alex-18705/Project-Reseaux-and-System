@@ -1,3 +1,22 @@
+/*
+Build on Windows (MinGW/MSYS2):
+    gcc -Wall main.c peer_manage.c handlers.c event_loop.c protocol.c -I../includes -o proxy -lws2_32
+
+Run two proxies on the same machine for local testing:
+    ./proxy.exe 5001 9001 127.0.0.1 9000
+    ./proxy.exe 5000 9000 127.0.0.1 9001
+
+Run Python test apps in another two terminals:
+    python -u ../test/test_app_remote.py 127.0.0.1 5001
+    python -u ../test/test_app_local.py 127.0.0.1 5000
+
+Program arguments:
+    <python_port> <peer_port> <remote_peer_ip> <remote_peer_port>
+
+Example:
+    ./proxy.exe 5000 9000 127.0.0.1 9001
+*/
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -18,8 +37,6 @@
 #include "app_context.h"
 #include "event_loop.h"
 
-#define PEER_PORT   6000
-#define PYTHON_PORT 5000
 #define PYTHON_HOST "127.0.0.1"
 
 
@@ -34,13 +51,11 @@ static int init_socket_system(void) {
     return 0;
 }
 
-
 static void cleanup_socket_system(void) {
 #ifdef _WIN32
     WSACleanup();
 #endif
 }
-
 
 static socket_t create_server_socket(const char *bind_ip, int port) {
     socket_t server_fd = socket(AF_INET, SOCK_DGRAM, 0);
@@ -79,6 +94,33 @@ static socket_t create_server_socket(const char *bind_ip, int port) {
     return server_fd;
 }
 
+static int parse_port(const char *value, const char *name) {
+    char *endptr = NULL;
+    long port = strtol(value, &endptr, 10);
+
+    if (!value || *value == '\0' || (endptr && *endptr != '\0') || port < 1 || port > 65535) {
+        fprintf(stderr, "Invalid %s: %s\n", name, value ? value : "(null)");
+        return -1;
+    }
+
+    return (int)port;
+}
+
+static int set_remote_peer(AppContext *ctx, const char *remote_ip, int remote_peer_port) {
+    memset(&ctx->peer_addr, 0, sizeof(ctx->peer_addr));
+    ctx->peer_addr.sin_family = AF_INET;
+    ctx->peer_addr.sin_port = htons(remote_peer_port);
+
+    if (inet_pton(AF_INET, remote_ip, &ctx->peer_addr.sin_addr) <= 0) {
+        fprintf(stderr, "Invalid remote peer IP: %s\n", remote_ip);
+        return -1;
+    }
+
+    ctx->peer_addr_len = sizeof(ctx->peer_addr);
+    ctx->has_peer_addr = 1;
+    return 0;
+}
+
 static void cleanup_context(AppContext *ctx) {
     if (!ctx){
         return;
@@ -101,9 +143,29 @@ static void cleanup_context(AppContext *ctx) {
     }
 }
 
-int main(void) {
+int main(int argc, char **argv) {
     AppContext ctx;
+    int python_port;
+    int peer_port;
+    int remote_peer_port;
+    const char *remote_peer_ip;
+
+    if (argc != 5) {
+        fprintf(stderr, "Usage: %s <python_port> <peer_port> <remote_peer_ip> <remote_peer_port>\n", argv[0]);
+        fprintf(stderr, "Example: %s 5000 9000 127.0.0.1 9001\n", argv[0]);
+        return EXIT_FAILURE;
+    }
+
     init_app_context(&ctx);
+
+    python_port = parse_port(argv[1], "python_port");
+    peer_port = parse_port(argv[2], "peer_port");
+    remote_peer_ip = argv[3];
+    remote_peer_port = parse_port(argv[4], "remote_peer_port");
+
+    if (python_port < 0 || peer_port < 0 || remote_peer_port < 0) {
+        return EXIT_FAILURE;
+    }
 
     if (init_socket_system() != 0) {
         return EXIT_FAILURE;
@@ -113,26 +175,34 @@ int main(void) {
      * 1. Create server socket for peers
      *    Other machines/peers will connect here
      */
-    ctx.peer_fd = create_server_socket(NULL, PEER_PORT);
+    ctx.peer_fd = create_server_socket(NULL, peer_port);
     if (ctx.peer_fd == INVALID_FD) {
         cleanup_socket_system();
         return EXIT_FAILURE;
     }
 
-    printf("[MAIN] Peer server listening on 0.0.0.0:%d\n", PEER_PORT);
+    printf("[MAIN] Peer UDP socket listening on 0.0.0.0:%d\n", peer_port);
 
     /*
      * 2. Create local server socket for Python
      *    Python process connects to localhost:5000
      */
-    socket_t python_fd = create_server_socket(PYTHON_HOST, PYTHON_PORT);
-    if (python_fd == INVALID_FD) {
+    ctx.python_fd = create_server_socket(PYTHON_HOST, python_port);
+    if (ctx.python_fd == INVALID_FD) {
         cleanup_context(&ctx);
         cleanup_socket_system();
         return EXIT_FAILURE;
     }
 
-    printf("[MAIN] Python local server listening on %s:%d\n", PYTHON_HOST, PYTHON_PORT);
+    printf("[MAIN] Python UDP socket listening on %s:%d\n", PYTHON_HOST, python_port);
+
+    if (set_remote_peer(&ctx, remote_peer_ip, remote_peer_port) != 0) {
+        cleanup_context(&ctx);
+        cleanup_socket_system();
+        return EXIT_FAILURE;
+    }
+
+    printf("[MAIN] Remote peer configured as %s:%d\n", remote_peer_ip, remote_peer_port);
 
     /*
      * 3. Start main event loop
@@ -144,13 +214,6 @@ int main(void) {
     /*
      * 5. Cleanup
      */
-    if (ctx.peer_fd != INVALID_FD) {
-        CLOSESOCKET(ctx.peer_fd);
-    }
-    if (ctx.python_fd != INVALID_FD) {
-        CLOSESOCKET(ctx.python_fd);
-    }
-
     cleanup_context(&ctx);
     cleanup_socket_system();
     return EXIT_SUCCESS;

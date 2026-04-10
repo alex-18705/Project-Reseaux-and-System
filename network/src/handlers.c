@@ -53,14 +53,23 @@ void handle_peer_data(AppContext *ctx) {
         stop("recvfrom peer");
     }
 
+    printf("[C] recv from peer: %d bytes from %s:%d\n",
+           r,
+           inet_ntoa(src_addr.sin_addr),
+           ntohs(src_addr.sin_port));
+
     ctx->peer_addr = src_addr;
     ctx->peer_addr_len = addr_len;
     ctx->has_peer_addr = 1;
 
     if (!ctx->has_python_addr) {
-        printf("Python address unknown\n");
+        printf("[C] Python address unknown, dropping peer packet\n");
         return;
     }
+
+    printf("[C] forward to python: %s:%d\n",
+           inet_ntoa(ctx->python_addr.sin_addr),
+           ntohs(ctx->python_addr.sin_port));
 
     int s = sendto(ctx->python_fd, buffer, r, 0, (struct sockaddr *)&ctx->python_addr, ctx->python_addr_len);
     if (s < 0) {
@@ -79,15 +88,24 @@ void handle_python_data(AppContext *ctx) {
     if (r<=0){
         stop ("recvfrom python");
     }
+
+    printf("[C] recv from python: %d bytes from %s:%d\n",
+           r,
+           inet_ntoa(src_addr.sin_addr),
+           ntohs(src_addr.sin_port));
     
     ctx->python_addr = src_addr;
     ctx->python_addr_len = addr_len;
     ctx->has_python_addr = 1;
 
     if (!ctx->has_peer_addr){
-        printf("Peer address unknown\n");
+        printf("[C] Peer address unknown, dropping python packet\n");
         return;
     }
+
+    printf("[C] forward to peer: %s:%d\n",
+           inet_ntoa(ctx->peer_addr.sin_addr),
+           ntohs(ctx->peer_addr.sin_port));
 
     int s = sendto(ctx->peer_fd, buffer, r, 0, (struct sockaddr*)&ctx->peer_addr, ctx->peer_addr_len);
     if (s < 0) {

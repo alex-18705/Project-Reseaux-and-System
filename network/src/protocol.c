@@ -127,15 +127,15 @@ int parse_message(const char *json_str, Message *msg) {
 
 /* Build message C to peer*/
 void build_game_event(char *buffer, size_t buffer_size, const char *event_json) {
-    if ( !buffer_size == 0 || !buffer) {
+    if (buffer == NULL || buffer_size == 0) {
         return;
     }
-    snprintf(buffer, "{\"type\":\"GAME_EVENT\",\"payload\":{\"event\":%s}}", event_json ? event_json : "{}");
+    snprintf(buffer, buffer_size, "{\"type\":\"GAME_EVENT\",\"payload\":{\"event\":%s}}", event_json ? event_json : "{}");
 }
 
 /* Build message C to Python*/
 void build_remote_event(char *buffer, size_t buffer_size, const char *event_json){
-    if ( !buffer_size == 0 || !buffer) {
+    if (buffer == NULL || buffer_size == 0) {
         return;
     }
     snprintf(buffer, buffer_size, "{\"type\":\"REMOTE_EVENT\",\"payload\":{\"event\":%s}}", event_json ? event_json : "{}");
