@@ -94,9 +94,7 @@ def main():
 
     # ==================== MODE:  ONLINE ====================
     if args.mode == "online":
-        battle = Online()
-        battle.max_tick = args.ticks
-        gameMode = battle
+        gameMode = Online()
 
         map_obj = load_map_from_file(args.map_file)
         gameMode.my_army = load_army_from_file(args.army_file)
@@ -128,6 +126,7 @@ def main():
     # ==================== MODE:  RUN ====================
     if args.mode == "run":
             battle = Battle()
+            battle.max_tick = args.ticks
             gameMode = battle
 
             army1, army2 = load_mirrored_army_from_file(args.army_file)
