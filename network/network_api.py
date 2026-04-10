@@ -117,12 +117,14 @@ class NetworkBridge:
         print("[NetworkBridge] Thread de réception arrêté.")
 
     # ---- Envoi de messages ----
-    def send_message(self, msg_type, payload_dict=None):
+    def send_message(self, msg_type, destination, payload_dict=None):
         """
         Envoie un message JSON vers le Proxy C en UDP.
 
         Structure du datagramme :
         {
+            "size": <taille en octets>
+            "ip" : <ip destination>
             "seq":     <numéro de séquence entier croissant>,
             "type":    <type du message>,
             "payload": <données utiles>
@@ -141,6 +143,8 @@ class NetworkBridge:
         self._seq_out += 1
 
         message = {
+            "size": len(payload_dict),
+            "ip": destination,
             "seq":     self._seq_out,
             "type":    msg_type,
             "payload": payload_dict
