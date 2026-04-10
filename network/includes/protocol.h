@@ -7,8 +7,7 @@
 
 typedef struct {
     char type[MSG_TYPE_SIZE]; 
-    char target_peer_id[PEER_ID_SIZE];
-    char event_json[JSON_SIZE]; // JSON string for the event payload
+    char event_json[JSON_SIZE]; // JSON object string for the event payload
 } Message;
 
 /* PARSE MESSAGE FROM PYTHON 
@@ -22,47 +21,10 @@ typedef struct {
  * }
  */
 int parse_message(const char *json_str, Message *msg);
-
-/*BUILD MESSAGE FROM C TO PYTHON 
-*
- * build_peer_connected:
- *   {
- *     "type": "PEER_CONNECTED",
- *     "payload": {
- *       "peer_id": "<peer-id>",
- *       "ip": "<ip>",
- *       "port": <port>
- *     }
- *   }
- *
- * build_peer_disconnected:
- *   {
- *     "type": "PEER_DISCONNECTED",
- *     "payload": {
- *       "peer_id": "<peer-id>"
- *     }
- *   }
- *
- * build_peer_message:
- *   {
- *     "type": "PEER_MESSAGE",
- *     "payload": {
- *       "peer_id": "<peer-id>",
- *       "event": { ... }
- *     }
- *   }
- *
- * build_game_event:
- *   {
- *     "type": "GAME_EVENT",
- *     "payload": {
- *       "event": { ... }
- *     }
- *   }
-*/
-void build_peer_connected(char *buffer, const char *peer_id, const char *ip, int port);
-void build_peer_disconnected(char *buffer, const char *peer_id);
-void build_peer_message(char *buffer, const char *peer_id, const char *event_json);
-void build_game_event(char *buffer, const char *event_json);
+void build_game_event(char *buffer, size_t buffer_size, const char *event_json); // Python local event to C -> peer
+void build_remote_event(char *buffer, size_t buffer_size, const char *event_json); // peer event to C -> Python
+// void build_peer_message(char *buffer, const char *peer_id, const char *event_json);
+// void build_peer_connected(char *buffer, const char *peer_id, const char *ip, int port);
+// void build_peer_disconnected(char *buffer, const char *peer_id);
 
 #endif

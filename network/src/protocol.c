@@ -36,39 +36,6 @@ static int extract_type(const char *json_str, char *type_buf, size_t buf_size) {
     return 0;
 }
 
-/* precise target peer identifier of message*/
-static int extract_target_peer_id(const char *json_str, char *peer_id_buf, size_t buf_size) {
-    const char *p = strstr(json_str, "\"target_peer_id\"");
-    if (!p) {
-        return -1;
-    }
-    p = strchr(p, ':');
-    if (!p) {
-        return -1;
-    }
-    p++;
-    while (*p == ' ' || *p == '\t') {
-        p++;
-    }
-    if (*p != '"') {
-        return -1;
-    }
-    p++;
-
-    const char *end = strchr(p, '"');
-    if (!end) {
-        return -1;
-    }
-
-    size_t len = (size_t)(end - p);
-    if (len >= buf_size) {
-        len = buf_size - 1;
-    }
-    strncpy(peer_id_buf, p, len);
-    peer_id_buf[len] = '\0';
-    return 0;
-}
-
 /* precise event_json of message*/
 static int extract_event_json(const char *json_str, char *event_buf, size_t buf_size) {
     if (!json_str || !event_buf || buf_size == 0) {
@@ -137,10 +104,7 @@ int parse_message(const char *json_str, Message *msg) {
         return -1;
     }
 
-    if (strcmp(msg->type, "SEND_TO") == 0) {
-        if (extract_target_peer_id(json_str, msg->target_peer_id, sizeof(msg->target_peer_id)) != 0) {
-            return -1;
-        }
+    if (strcmp(msg->type, "GAME_EVENT") == 0 || strcmp(msg->type, "REMOTE_EVENT") == 0) {
         if (extract_event_json(json_str, msg->event_json, sizeof(msg->event_json)) != 0) {
             return -1;
         }
@@ -161,22 +125,18 @@ int parse_message(const char *json_str, Message *msg) {
     return -1;
 }
 
-/*Build message C to Python when peer connected*/
-void build_peer_connected(char *buffer, const char *peer_id, const char *ip, int port) {
-    sprintf(buffer, "{\"type\":\"PEER_CONNECTED\",\"payload\":{\"peer_id\":\"%s\",\"ip\":\"%s\",\"port\":%d}}", peer_id ? peer_id : "", ip ? ip : "", port);
-}
-
-/* Build message C to Python when peer disconnected*/
-void build_peer_disconnected(char *buffer, const char *peer_id) {
-    sprintf(buffer,"{\"type\":\"PEER_DISCONNECTED\",\"payload\":{\"peer_id\":\"%s\"}}", peer_id ? peer_id : "");
-}
-
-/*Build message C to Python when peer send message*/
-void build_peer_message(char *buffer, const char *peer_id, const char *event_json) {
-    sprintf(buffer, "{\"type\":\"PEER_MESSAGE\",\"payload\":{\"peer_id\":\"%s\",\"event\":%s}}", peer_id ? peer_id : "", event_json ? event_json : "{}" );
-}
-
 /* Build message C to peer*/
-void build_game_event(char *buffer, const char *event_json) {
-    sprintf(buffer, "{\"type\":\"GAME_EVENT\",\"payload\":{\"event\":%s}}", event_json ? event_json : "{}");
+void build_game_event(char *buffer, size_t buffer_size, const char *event_json) {
+    if ( !buffer_size == 0 || !buffer) {
+        return;
+    }
+    snprintf(buffer, "{\"type\":\"GAME_EVENT\",\"payload\":{\"event\":%s}}", event_json ? event_json : "{}");
+}
+
+/* Build message C to Python*/
+void build_remote_event(char *buffer, size_t buffer_size, const char *event_json){
+    if ( !buffer_size == 0 || !buffer) {
+        return;
+    }
+    snprintf(buffer, buffer_size, "{\"type\":\"REMOTE_EVENT\",\"payload\":{\"event\":%s}}", event_json ? event_json : "{}");
 }

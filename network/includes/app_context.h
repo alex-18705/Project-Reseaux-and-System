@@ -25,6 +25,7 @@ typedef struct {
     struct sockaddr_in addr;
     socklen_t addr_len;
     int active;
+    char peer_id[64]; // Unique identifier for the peer (e.g., username or UUID)
 } Peer;
 
 typedef struct {
@@ -35,5 +36,6 @@ typedef struct {
 } AppContext;
 
 void init_app_context(AppContext *ctx);
+int stop(char *msg);
 
 #endif
