@@ -103,7 +103,7 @@ def main():
         map_obj = load_map_from_file(args.map_file)
         gameMode.my_army = load_army_from_file(args.army_file)
 
-        general = general_from_name(args.general1)()
+        general = general_from_name(args.general)()
 
         gameMode.my_army.general = general
         general.army = gameMode.my_army
