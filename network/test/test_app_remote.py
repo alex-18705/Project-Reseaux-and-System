@@ -14,7 +14,12 @@ def main():
     host = sys.argv[1] if len(sys.argv) > 1 else "127.0.0.1"
     port = int(sys.argv[2]) if len(sys.argv) > 2 else 5000
 
-    bridge = NetworkBridge(host=host, port=port)
+    bridge = NetworkBridge(
+        host=host, 
+        port=port,
+        auto_start = True,
+        proxy_cmd = ["../src/proxy.exe", "5001", "9001", "127.0.0.1", "9000"]
+    )
     bridge.connect()
 
     print(f"[REMOTE] Waiting for forwarded message from C proxy at {host}:{port}...")

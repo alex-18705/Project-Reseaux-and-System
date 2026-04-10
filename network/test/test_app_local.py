@@ -14,10 +14,15 @@ def main():
     host = sys.argv[1] if len(sys.argv) > 1 else "127.0.0.1"
     port = int(sys.argv[2]) if len(sys.argv) > 2 else 5000
 
-    bridge = NetworkBridge(host=host, port=port)
+    bridge = NetworkBridge(
+        host=host, 
+        port=port,
+        auto_start = True,
+        proxy_cmd = ["../src/proxy.exe", "5000", "9000", "127.0.0.1", "9001"]
+    )
     bridge.connect()
 
-    time.sleep(1.0)
+    time.sleep(3.0)
 
     print(f"[LOCAL] Sending test message to C proxy at {host}:{port}...")
     bridge.send_message(
