@@ -2,12 +2,6 @@ import json
 
 from backend.Class.Army import Army
 from backend.Utils.file_loader import load_mirrored_army_from_file, load_map_from_file
-from backend.Class.Units.Crossbowman import Crossbowman
-from backend.Class.Units.Knight import Knight
-from backend.Class.Map import Map
-from backend.Class.Obstacles.Obstacle import Obstacle
-
-from backend.Class.Units.Unit import Unit
 
 
 def main():
@@ -27,8 +21,8 @@ def unit_to_dict(unit):
         "hp": unit.hp,
         "position": unit.position,
         "cooldown": unit.cooldown,
-        "last_attacker": unit.last_attacker,
-        "last_attacked": unit.last_attacked,
+        "last_attacker": unit.last_attacker_id,
+        "last_attacked": unit.last_attacked_id,
     }
 
 def obstacle_to_dict(obstacle):
@@ -41,7 +35,7 @@ def map_to_dict(map):
     return {
         "width": map.width,
         "height": map.height,
-        "obstacles": (obstacle_to_dict(o) for o in map.obstacles),
+        "obstacles": [obstacle_to_dict(o) for o in map.obstacles],
     }
 
 def army_to_json(army):
@@ -56,7 +50,8 @@ def json_to_army(filepath="army.json"):
     army = Army()
     for d in units_data:
         cls = d["type"]
-        if cls not in UNIT_CLASSES:
+        cls_name= globals()[cls]
+        if cls not in cls_name:
             continue
         unit = cls(
             position=tuple(d["position"] if d["position"] else None),
@@ -68,8 +63,11 @@ def json_to_army(filepath="army.json"):
 
 
 def map_to_json(map_obj):
-    print(map_obj)
-    pass
+    data = json.dumps(map_to_dict(map_obj))
+    with open(f"./map.json", "w") as f:
+        f.write(data)
+    return data
+
 def json_to_map(json):
     pass
 
