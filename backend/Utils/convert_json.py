@@ -15,8 +15,28 @@ from backend.Class.Obstacles.Rocher import Rocher
 
 #Tous les imports sont nécessaires !
 
+# ====================================================================
+#   ConvertJson — Données Python ↔ Chaine de caractères (format json)
+#
+#   Fonctionnalités clés :
+#   - unit_to_dict(unit): dict()
+#   - army_to_dict(army): dict()
+#   - obstacle_to_dict(obstacle): dict()
+#   - map_to_dict(map_obj): dict()
+#   Transforme les données (unit, army, obstacle, map) en dictionnaires
+#   lisible pour la conversion en json
+#
+#   - army_to_json(army): str()
+#   - map_to_json(map_obj): str()
+#   Converti les dictionnaires (army, map) en chaine de caractères json
+#
+#   - json_to_army(data_army): army=Army()
+#   - json_to_map(data_map): map=Map()
+#   Converti les chaines de caractères json en armée et map
+# =====================================================================
+
 # ==============================================
-# Transformation des données en dictionnaire  =
+# Transformation des données en dictionnaire   =
 # ==============================================
 
 def unit_to_dict(unit):
@@ -51,7 +71,7 @@ def map_to_dict(map_obj):
 
 
 # ========================
-# Conversion de l'armée =
+# Conversion de l'armée  =
 # ========================
 
 def army_to_json(army):
@@ -78,7 +98,7 @@ def json_to_army(data_army):
 
 
 # ========================
-# Conversion de la map  =
+# Conversion de la map   =
 # ========================
 
 def map_to_json(map_obj):
