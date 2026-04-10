@@ -3,8 +3,8 @@
 
 #include "app_context.h"
 
-void handle_new_peer(AppContext *ctx);
-void handle_peer_data(AppContext *ctx, int peer_fd);
+// void handle_new_peer(AppContext *ctx);
+void handle_peer_data(AppContext *ctx);
 void handle_python_data(AppContext *ctx);
 
 #endif
