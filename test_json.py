@@ -4,6 +4,7 @@ from backend.Class.Army import Army
 from backend.Utils.file_loader import load_mirrored_army_from_file, load_map_from_file
 
 
+
 def main():
 
         army1, army2 = load_mirrored_army_from_file("./army/classique.army")
@@ -13,6 +14,11 @@ def main():
         army_to_json(army1)
         print(map_obj.obstacles, "\n")
         map_to_json(map_obj)
+
+        army_end = json_to_army()
+        print(army_end.units, "\n")
+        #json_to_map()
+
 
 
 def unit_to_dict(unit):
@@ -44,14 +50,14 @@ def army_to_json(army):
         f.write(data)
     return data
 
-def json_to_army(filepath="army.json"):
+def json_to_army():
+    filepath = "army.json"
     with open(filepath) as json_file:
         units_data = json.load(json_file)
     army = Army()
     for d in units_data:
-        cls = d["type"]
-        cls_name= globals()[cls]
-        if cls not in cls_name:
+        cls = globals().get(d["type"])
+        if cls is None:
             continue
         unit = cls(
             position=tuple(d["position"] if d["position"] else None),
@@ -60,6 +66,9 @@ def json_to_army(filepath="army.json"):
         unit.cooldown = d["cooldown"]
         unit.last_attacker = d["last_attacker"]
         unit.last_attacked = d["last_attacked"]
+        army.units.append(unit)
+    return army
+
 
 
 def map_to_json(map_obj):
@@ -68,8 +77,26 @@ def map_to_json(map_obj):
         f.write(data)
     return data
 
-def json_to_map(json):
-    pass
+"""def json_to_map():
+    filepath = "map.json"
+    with open(filepath) as json_file:
+        map_data = json.load(json_file)
+    
+    map=Map()
+    
+    for d in units_data:
+        cls = globals().get(d["type"])
+        if cls is None:
+            continue
+        unit = cls(
+            position=tuple(d["position"] if d["position"] else None),
+        )
+        unit.hp = d["hp"]
+        unit.cooldown = d["cooldown"]
+        unit.last_attacker = d["last_attacker"]
+        unit.last_attacked = d["last_attacked"]
+        army.units.append(unit)
+    return army"""
 
 #Appel de main pour contrôler
 main()
