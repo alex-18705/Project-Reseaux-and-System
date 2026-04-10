@@ -5,7 +5,7 @@ from backend.GameModes.Battle import Battle
 from backend.GameModes.Online import Online
 from backend.GameModes.TestOnline import TestOnline
 from backend.Utils.class_by_name import general_from_name, get_available_generals
-from backend.Utils.file_loader import load_mirrored_army_from_file, load_map_from_file
+from backend.Utils.file_loader import load_mirrored_army_from_file, load_map_from_file, load_army_from_file
 from frontend.Terminal import Screen
 from frontend.Terminal.NoAffiche import NoAffiche
 

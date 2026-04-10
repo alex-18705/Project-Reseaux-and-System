@@ -11,7 +11,7 @@ from backend.GameModes.Battle import Battle
 from backend.GameModes.Online import Online
 from backend.GameModes.TestOnline import TestOnline
 from backend.Utils.class_by_name import general_from_name, get_available_generals
-from backend.Utils.file_loader import load_army_from_file, load_map_from_file
+from backend.Utils.file_loader import load_army_from_file, load_map_from_file, load_mirrored_army_from_file
 from frontend.Terminal import Screen
 from frontend.Terminal.NoAffiche import NoAffiche
 
@@ -105,17 +105,8 @@ def main():
         battle.max_tick = args.ticks
         gameMode = battle
 
-        army1 = load_army_from_file(args.army_file)
+        army1, army2 = load_mirrored_army_from_file(args.army_file)
         map_obj = load_map_from_file(args.map_file)
-        u1 = Pikeman((0,0))
-        u2 = Pikeman((2,2))
-        u3 = Knight((4,4))
-        army2 = Army()
-        army2.units.append(u1)
-        army2.units.append(u2)
-        army2.units.append(u3)
-
-        print(army1)
 
         gameMode.army1 = army1
         gameMode.army2 = army2
@@ -153,8 +144,16 @@ def main():
             battle.max_tick = args.ticks
             gameMode = battle
 
-            army1, army2 = load_army_from_file(args.army_file)
+            army1 = load_army_from_file(args.army_file)
             map_obj = load_map_from_file(args.map_file)
+
+            u1 = Pikeman((0, 0))
+            u2 = Pikeman((2, 2))
+            u3 = Knight((4, 4))
+            army2 = Army()
+            army2.units.append(u1)
+            army2.units.append(u2)
+            army2.units.append(u3)
 
             gameMode.army1 = army1
             gameMode.army2 = army2
