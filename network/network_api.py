@@ -44,6 +44,8 @@ class NetworkBridge:
 
     # ---- Connexion ----
     def connect(self):
+        #Demarrage du programme C
+
         """Ouvre le socket UDP local et démarre le thread de réception."""
         self.sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
         # Timeout de 1 s : le thread peut vérifier is_connected périodiquement

@@ -19,19 +19,19 @@ from backend.Class.Obstacles.Rocher import Rocher
 #   ConvertJson — Données Python ↔ Chaine de caractères (format json)
 #
 #   Fonctionnalités clés :
-#   - unit_to_dict(unit): dict()
-#   - army_to_dict(army): dict()
-#   - obstacle_to_dict(obstacle): dict()
-#   - map_to_dict(map_obj): dict()
+#   - unit_to_dict(unit) -> dict():
+#   - army_to_dict(army) -> dict():
+#   - obstacle_to_dict(obstacle) -> dict():
+#   - map_to_dict(map_obj) -> dict():
 #   Transforme les données (unit, army, obstacle, map) en dictionnaires
 #   lisible pour la conversion en json
 #
-#   - army_to_json(army): str()
-#   - map_to_json(map_obj): str()
+#   - army_to_json(army) -> str():
+#   - map_to_json(map_obj) -> str():
 #   Converti les dictionnaires (army, map) en chaine de caractères json
 #
-#   - json_to_army(data_army): army=Army()
-#   - json_to_map(data_map): map=Map()
+#   - json_to_army(data_army) -> Army:
+#   - json_to_map(data_map) -> Map:
 #   Converti les chaines de caractères json en armée et map
 # =====================================================================
 
