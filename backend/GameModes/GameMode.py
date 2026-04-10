@@ -49,7 +49,7 @@ class GameMode(ABC) :
 
         while running:
             # Check if battle should continue
-            battle_continues = self.stop_condition()
+            battle_continues = self.continue_condition()
             paused = False
             if hasattr(self.affichage, "is_paused") and callable(getattr(self.affichage, "is_paused")):
                 try:
