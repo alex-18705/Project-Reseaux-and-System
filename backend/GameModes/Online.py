@@ -90,7 +90,10 @@ class Online(GameMode):
 
     @property
     def army2(self):
-        return self.othersArmy.get(0, Army())
+        try :
+            return self.othersArmy[0]
+        except:
+            return Army()
 
     @army2.setter
     def army2(self, value):
