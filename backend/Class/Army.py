@@ -17,7 +17,7 @@ class Army:
         self.gameMode = None
         self.general = None
         self.units = []  # list of Unit objects
-        self.id = str(uuid.uuid4())
+        self.uid = str(uuid.uuid4())
 
     def add_unit(self, unit: Unit):
         unit.army = self

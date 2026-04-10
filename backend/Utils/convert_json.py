@@ -13,28 +13,7 @@ from backend.Class.Units.Pikeman import Pikeman
 
 from backend.Class.Obstacles.Rocher import Rocher
 
-
-def main():
-    army1, army2 = load_mirrored_army_from_file("../../army/classique.army")
-    map_obj = load_map_from_file("../../map/superflat.map")
-    print(army1.units)
-    print(map_obj.obstacles)
-
-    #Conversion en string de type json
-    data_army1 = army_to_json(army1)
-    data_army2 = army_to_json(army2)
-    print(data_army1)
-    data_json_map = map_to_json(map_obj)
-
-    #conversion en structure python
-    army_end1 = json_to_army(data_army1)
-    army_end2 = json_to_army(data_army2)
-    map_end = json_to_map(data_json_map)
-
-    #Vérifications
-    print(army_end1.units)
-    print(map_end.obstacles)
-
+#Tous les imports sont nécessaires !
 
 # ==============================================
 # Transformation des données en dictionnaire  =
@@ -50,6 +29,11 @@ def unit_to_dict(unit):
         "last_attacked": unit.last_attacked_id,
     }
 
+def army_to_dict(army):
+    return {
+        "uid": army.uid,
+        "units": [unit_to_dict(u) for u in army.units],
+    }
 
 def obstacle_to_dict(obstacle):
     return {
@@ -57,7 +41,6 @@ def obstacle_to_dict(obstacle):
         "size": obstacle.size,
         "position": obstacle.position,
     }
-
 
 def map_to_dict(map_obj):
     return {
@@ -72,14 +55,14 @@ def map_to_dict(map_obj):
 # ========================
 
 def army_to_json(army):
-    data = json.dumps([unit_to_dict(u) for u in army.units])
+    data = json.dumps(army_to_dict(army))
     return data
 
-
 def json_to_army(data_army):
-    units_data = json.loads(data_army)
+    army_data = json.loads(data_army)
     army = Army()
-    for d in units_data:
+    army.uid = army_data["uid"]
+    for d in army_data["units"]:
         cls = globals().get(d["type"])
         if cls is None:
             continue
@@ -121,7 +104,26 @@ def json_to_map(data_map):
     return map_obj
 
 
-# Appel de main pour contrôler
+"""def main():
+    army1, army2 = load_mirrored_army_from_file("../../army/classique.army")
+    map_obj = load_map_from_file("../../map/superflat.map")
+    print(army1.units)
+    print(map_obj.obstacles)
+
+    #Conversion en string de type json
+    data_army1 = army_to_json(army1)
+    data_army2 = army_to_json(army2)
+    print(data_army1)
+    data_json_map = map_to_json(map_obj)
+
+    #conversion en structure python
+    army_end1 = json_to_army(data_army1)
+    army_end2 = json_to_army(data_army2)
+    map_end = json_to_map(data_json_map)
+
+    #Vérifications
+    print(army_end1.units)
+    print(map_end.obstacles)
+    
 main()
-
-
+"""
