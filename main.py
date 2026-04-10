@@ -48,19 +48,10 @@ def main():
     )
 
     # ==================== ONLINE ====================
-    run_parser = subparsers.add_parser("online", help="Run a new battle")
+    run_parser = subparsers.add_parser("online", help="Run a new online battle")
 
     run_parser.add_argument(
-        "--ticks", "-t", type=int, default=None,
-        help="Maximum ticks to run the battle (omit to run until end)"
-    )
-
-    run_parser.add_argument(
-        "--general1", "-g1", type=str, default=None,
-        help=f"Comma-separated list of generals.  Available: {', '.join(get_available_generals())}"
-    )
-    run_parser.add_argument(
-        "--general2", "-g2", type=str, default=None,
+        "--general", "-g", type=str, default=None,
         help=f"Comma-separated list of generals.  Available: {', '.join(get_available_generals())}"
     )
     run_parser.add_argument(
@@ -79,6 +70,14 @@ def main():
         "--pygame", action="store_true", dest="use_pygame",
         help="Use pygame graphical display if available"
     )
+    run_parser.add_argument(
+        "--create", action="store_true", dest="create",
+        help="Start online mode with no know ip"
+    )
+    run_parser.add_argument(
+        "--join", type=str,
+        help="--join <ip>"
+    )
 
     # ==================== TestOnline ====================
     run_parser = subparsers.add_parser("testOnline", help="Test online")
@@ -93,25 +92,19 @@ def main():
 
     gameMode = None
 
-    # ==================== MODE:  RUN ====================
-    if args.mode == "run":
-        battle = Battle()
+    # ==================== MODE:  ONLINE ====================
+    if args.mode == "online":
+        battle = Online()
         battle.max_tick = args.ticks
         gameMode = battle
 
-        army1, army2 = load_mirrored_army_from_file(args.army_file)
         map_obj = load_map_from_file(args.map_file)
+        gameMode.my_army = load_army_from_file(args.army_file)
 
-        gameMode.army1 = army1
-        gameMode.army2 = army2
+        general = general_from_name(args.general1)()
 
-        general1 = general_from_name(args.general1)()
-        general2 = general_from_name(args.general2)()
-
-        army1.general = general1
-        general1.army = army1
-        army2.general = general2
-        general2.army = army2
+        gameMode.my_army.general = general
+        general.army = gameMode.my_army
 
         gameMode.map = map_obj
 
@@ -132,10 +125,9 @@ def main():
         gameMode.gameLoop()
         gameMode.end()
 
-    # ==================== MODE:  ONLINE ====================
-    if args.mode == "online":
-            battle = Online()
-            battle.max_tick = args.ticks
+    # ==================== MODE:  RUN ====================
+    if args.mode == "run":
+            battle = Battle()
             gameMode = battle
 
             army1, army2 = load_mirrored_army_from_file(args.army_file)
