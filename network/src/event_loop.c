@@ -14,6 +14,7 @@
 void run_event_loop(AppContext *ctx) {
     fd_set readfds;
     while (ctx->running) {
+        struct timeval timeout;
         int max_fd;
         FD_ZERO(&readfds);
 
@@ -24,10 +25,15 @@ void run_event_loop(AppContext *ctx) {
         FD_SET(ctx->python_fd, &readfds);
 
         max_fd = (ctx->peer_fd > ctx->python_fd) ? ctx->peer_fd : ctx->python_fd;
+        timeout.tv_sec = 1;
+        timeout.tv_usec = 0;
         
-        int activity = select (max_fd +1, &readfds, NULL, NULL, NULL);
+        int activity = select (max_fd +1, &readfds, NULL, NULL, &timeout);
         if (activity<0){
             stop("select");
+        }
+        if (activity == 0) {
+            continue;
         }
 
         if (FD_ISSET(ctx->peer_fd, &readfds)) {

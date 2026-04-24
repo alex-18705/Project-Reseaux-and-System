@@ -8,6 +8,9 @@
 typedef struct {
     char type[MSG_TYPE_SIZE]; 
     char event_json[JSON_SIZE]; // JSON object string for the event payload
+    int taill_json;
+    // struct sockaddr peer_addr; // For SEND_TO messages, the target peer's address
+    // struct sockaddr python_addr; // For messages from peer to Python, the source Python address
 } Message;
 
 /* PARSE MESSAGE FROM PYTHON 
@@ -20,6 +23,7 @@ typedef struct {
  *   }
  * }
  */
+
 int parse_message(const char *json_str, Message *msg);
 void build_game_event(char *buffer, size_t buffer_size, const char *event_json); // Python local event to C -> peer
 void build_remote_event(char *buffer, size_t buffer_size, const char *event_json); // peer event to C -> Python

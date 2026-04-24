@@ -62,9 +62,12 @@ void handle_peer_data(AppContext *ctx) {
            inet_ntoa(src_addr.sin_addr),
            ntohs(src_addr.sin_port));
 
-    ctx->peer_addr = src_addr;
-    ctx->peer_addr_len = addr_len;
-    ctx->has_peer_addr = 1;
+    if (!is_known_peer(ctx, &src_addr, addr_len)) {
+        printf("[C] unknown peer %s:%d, dropping packet\n",
+               inet_ntoa(src_addr.sin_addr),
+               ntohs(src_addr.sin_port));
+        return;
+    }
 
     if (!ctx->has_python_addr) {
         printf("[C] Python address unknown, dropping peer packet\n");
@@ -85,7 +88,7 @@ void handle_peer_data(AppContext *ctx) {
 
 /* Event: Python send to C*/
 void handle_python_data(AppContext *ctx) {
-    char buffer[BUF_SIZE * 2];
+    char buffer[BUF_SIZE + 1];
     struct sockaddr_in src_addr ;
     socklen_t addr_len = sizeof(src_addr);
     int r = recvfrom(ctx->python_fd, buffer, sizeof(buffer), 0, (struct sockaddr*)&src_addr, &addr_len);
@@ -97,6 +100,8 @@ void handle_python_data(AppContext *ctx) {
         printf("[C] Python closed connection\n");
         return;
     }
+
+    buffer[r] = '\0';
 
     printf("[C] recv from python: %d bytes from %s:%d\n",
            r,
@@ -115,18 +120,21 @@ void handle_python_data(AppContext *ctx) {
         return;
     }
 
-    if (!ctx->has_peer_addr){
-        printf("[C] Peer address unknown, dropping python packet\n");
+    if (r >= 10 && strstr(buffer, "\"type\":\"SHUTDOWN\"") != NULL) {
+        printf("[C] shutdown requested by python\n");
+        ctx->running = 0;
         return;
     }
 
-    printf("[C] forward to peer: %s:%d\n",
-           inet_ntoa(ctx->peer_addr.sin_addr),
-           ntohs(ctx->peer_addr.sin_port));
+    if (ctx->peer_count == 0) {
+        printf("[C] No registered peers, dropping python packet\n");
+        return;
+    }
 
-    int s = sendto(ctx->peer_fd, buffer, r, 0, (struct sockaddr*)&ctx->peer_addr, ctx->peer_addr_len);
-    if (s < 0) {
-        stop("sendto peer");
+    printf("[C] broadcasting to %d peer(s)\n", ctx->peer_count);
+
+    if (broadcast_to_peers(ctx, buffer, (size_t)r) < 0) {
+        stop("broadcast to peers");
     }
 
 }

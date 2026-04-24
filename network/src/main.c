@@ -11,10 +11,10 @@ Run Python test apps in another two terminals:
     python -u ../test/test_app_local.py 127.0.0.1 5000
 
 Program arguments:
-    <python_port> <peer_port> <remote_peer_ip> <remote_peer_port>
+    <python_port> <peer_port> <peer1_ip> <peer1_port> [<peer2_ip> <peer2_port> ...]
 
 Example:
-    ./proxy.exe 5000 9000 127.0.0.1 9001
+    ./proxy.exe 5000 9000 127.0.0.1 9001 127.0.0.1 9002
 */
 
 #include <stdio.h>
@@ -36,6 +36,7 @@ Example:
 
 #include "app_context.h"
 #include "event_loop.h"
+#include "peer_manage.h"
 
 #define PYTHON_HOST "127.0.0.1"
 
@@ -106,18 +107,23 @@ static int parse_port(const char *value, const char *name) {
     return (int)port;
 }
 
-static int set_remote_peer(AppContext *ctx, const char *remote_ip, int remote_peer_port) {
-    memset(&ctx->peer_addr, 0, sizeof(ctx->peer_addr));
-    ctx->peer_addr.sin_family = AF_INET;
-    ctx->peer_addr.sin_port = htons(remote_peer_port);
+static int register_remote_peer(AppContext *ctx, const char *remote_ip, int remote_peer_port) {
+    struct sockaddr_in peer_addr;
 
-    if (inet_pton(AF_INET, remote_ip, &ctx->peer_addr.sin_addr) <= 0) {
+    memset(&peer_addr, 0, sizeof(peer_addr));
+    peer_addr.sin_family = AF_INET;
+    peer_addr.sin_port = htons(remote_peer_port);
+
+    if (inet_pton(AF_INET, remote_ip, &peer_addr.sin_addr) <= 0) {
         fprintf(stderr, "Invalid remote peer IP: %s\n", remote_ip);
         return -1;
     }
 
-    ctx->peer_addr_len = sizeof(ctx->peer_addr);
-    ctx->has_peer_addr = 1;
+    if (add_peer(ctx, &peer_addr, sizeof(peer_addr)) != 0) {
+        fprintf(stderr, "Unable to register remote peer %s:%d\n", remote_ip, remote_peer_port);
+        return -1;
+    }
+
     return 0;
 }
 
@@ -137,9 +143,8 @@ static void cleanup_context(AppContext *ctx) {
     if (ctx->peer_fd != INVALID_FD) {
         CLOSESOCKET(ctx->peer_fd);
         ctx->peer_fd = INVALID_FD;
-        ctx->has_peer_addr = 0;
-        ctx->peer_addr_len = 0;
-        memset(&ctx->peer_addr, 0, sizeof(ctx->peer_addr));
+        ctx->peer_count = 0;
+        memset(&ctx->peers, 0, sizeof(ctx->peers));
     }
 }
 
@@ -147,12 +152,10 @@ int main(int argc, char **argv) {
     AppContext ctx;
     int python_port;
     int peer_port;
-    int remote_peer_port;
-    const char *remote_peer_ip;
 
-    if (argc != 5) {
-        fprintf(stderr, "Usage: %s <python_port> <peer_port> <remote_peer_ip> <remote_peer_port>\n", argv[0]);
-        fprintf(stderr, "Example: %s 5000 9000 127.0.0.1 9001\n", argv[0]);
+    if (argc < 5 || ((argc -3) %2 !=0)) {
+        fprintf(stderr,  "Usage: %s <python_port> <peer_port> <peer1_ip> <peer1_port> [<peer2_ip> <peer2_port> ...]\n", argv[0]);
+        fprintf(stderr, "Example: %s 5000 9000 127.0.0.1 9001 127.0.0.1 9002\n", argv[0]);
         return EXIT_FAILURE;
     }
 
@@ -160,10 +163,8 @@ int main(int argc, char **argv) {
 
     python_port = parse_port(argv[1], "python_port");
     peer_port = parse_port(argv[2], "peer_port");
-    remote_peer_ip = argv[3];
-    remote_peer_port = parse_port(argv[4], "remote_peer_port");
 
-    if (python_port < 0 || peer_port < 0 || remote_peer_port < 0) {
+    if (python_port < 0 || peer_port < 0) {
         return EXIT_FAILURE;
     }
 
@@ -196,13 +197,18 @@ int main(int argc, char **argv) {
 
     printf("[MAIN] Python UDP socket listening on %s:%d\n", PYTHON_HOST, python_port);
 
-    if (set_remote_peer(&ctx, remote_peer_ip, remote_peer_port) != 0) {
-        cleanup_context(&ctx);
-        cleanup_socket_system();
-        return EXIT_FAILURE;
-    }
+    for (int i = 3; i < argc; i += 2) {
+        const char *peer_ip = argv[i];
+        int remote_peer_port = parse_port(argv[i + 1], "remote_peer_port");
 
-    printf("[MAIN] Remote peer configured as %s:%d\n", remote_peer_ip, remote_peer_port);
+        if (remote_peer_port < 0 || register_remote_peer(&ctx, peer_ip, remote_peer_port) != 0) {
+            cleanup_context(&ctx);
+            cleanup_socket_system();
+            return EXIT_FAILURE;
+        }
+
+        printf("[MAIN] Remote peer configured as %s:%d\n", peer_ip, remote_peer_port);
+    }
 
     /*
      * 3. Start main event loop

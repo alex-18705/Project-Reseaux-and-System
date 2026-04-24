@@ -21,7 +21,14 @@ typedef int socket_t;
 #define INVALID_FD -1
 #endif
 
-#define BUF_SIZE 1024
+#define BUF_SIZE 65535
+#define MAX_PEERS 100
+
+typedef struct {
+    struct sockaddr_in addr;
+    socklen_t addr_len;
+    int active;
+} Peer;
 
 typedef struct {
     socket_t peer_fd; // UDP socket used to receive/send peer datagrams
@@ -31,9 +38,8 @@ typedef struct {
     socklen_t python_addr_len;
     int has_python_addr;
 
-    struct sockaddr_in peer_addr; // Remote C proxy address
-    socklen_t peer_addr_len;
-    int has_peer_addr;
+    Peer peers[MAX_PEERS];
+    int peer_count;
 
     int running;
 } AppContext;
