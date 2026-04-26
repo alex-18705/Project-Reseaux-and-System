@@ -70,14 +70,12 @@ class Online(GameMode):
         message = input()
 
         self.load_payload(message)
-
-
-
         all = self.flat()
-        self.army1.fight(self.map, otherArmy=all)
+        self.my_army.fight(self.map, otherArmy=all)
         self.update_army(all)
+        response = self.create_payload()
 
-        print(self.create_payload())
+        print(response)
 
 
 

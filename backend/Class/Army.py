@@ -15,8 +15,18 @@ from backend.Class.Units.Unit import Unit
 class Army:
     def __init__(self):
         self.gameMode = None
-        self.general = None
+        self.__general = None
         self.units = []  # list of Unit objects
+
+    @property
+    def general(self):
+        return self.__general
+
+    @general.setter
+    def general(self, value):
+        value.army = self
+        self.__general = value
+
 
     def add_unit(self, unit: Unit):
         unit.army = self
