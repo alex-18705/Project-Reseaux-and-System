@@ -73,11 +73,11 @@ socket_t ipc_accept_python(socket_t listen_fd) {
 }
 
 int ipc_recv_from_python(AppContext *ctx, char *buffer, size_t buffer_size) {
-    size_t used = 0;
+    size_t count = 0;
     if (!ctx || ctx->python_fd == INVALID_FD || !buffer || buffer_size <= 1) {
         return -1;
     }
-    while (used < buffer_size - 1) {
+    while (count < buffer_size - 1) {
         char ch;
         int received = recv(ctx->python_fd, &ch, 1, 0);
         if (received < 0) {
@@ -85,19 +85,19 @@ int ipc_recv_from_python(AppContext *ctx, char *buffer, size_t buffer_size) {
             return -1;
         }
         if (received == 0) {
-            if (used == 0) {
+            if (count == 0) {
                 buffer[0] = '\0';
                 return 0;
             }
             break;
         }
-        buffer[used++] = ch;
+        buffer[count++] = ch;
         if (ch == '\n') {
             break;
         }
     }
-    buffer[used] = '\0';
-    return (int)used;
+    buffer[count] = '\0';
+    return (int)count;
 }
 
 int ipc_send_to_python(AppContext *ctx, const char *msg, size_t len) {

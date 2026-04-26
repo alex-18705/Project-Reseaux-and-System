@@ -149,7 +149,7 @@ int parse_message(const char *json_str, Message *msg){
     }
 
     msg->kind = message_type_from_string(msg->type);
-    if (extract_json_string(json_str, "sender_peer_id", msg->sender_peer_id, sizeof(msg->sender_peer_id)) != 0) {
+    if (extract_json_string(json_str, "sender_id", msg->sender_peer_id, sizeof(msg->sender_peer_id)) != 0) {
         if (extract_json_string(json_str, "sender_peer_id", msg->sender_peer_id, sizeof(msg->sender_peer_id)) != 0) {
             return -1;
         }
