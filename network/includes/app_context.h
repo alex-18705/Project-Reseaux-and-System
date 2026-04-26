@@ -23,28 +23,28 @@ typedef int socket_t;
 
 #define BUF_SIZE 65535
 #define MAX_PEERS 100
+#define PEER_ID_SIZE 64
 
 typedef struct {
+    char peer_id[PEER_ID_SIZE];
     struct sockaddr_in addr;
     socklen_t addr_len;
     int active;
 } Peer;
 
 typedef struct {
-    socket_t peer_fd; // UDP socket used to receive/send peer datagrams
-    socket_t python_fd; // UDP socket used to receive/send Python datagrams
-    
-    struct sockaddr_in python_addr; // Last known local Python address
-    socklen_t python_addr_len;
-    int has_python_addr;
-
+    char local_peer_id[PEER_ID_SIZE];
+    // UDP socket: C proxy <-> C proxy
+    socket_t peer_fd;
+    // IPC socket: C proxy <-> Python
+    socket_t python_fd; 
     Peer peers[MAX_PEERS];
     int peer_count;
-
     int running;
 } AppContext;
 
 void init_app_context(AppContext *ctx);
+
 void stop(const char *msg);
 
 #endif
