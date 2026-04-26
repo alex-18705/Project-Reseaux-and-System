@@ -9,6 +9,7 @@ from backend.Utils.class_by_name import general_from_name
 from backend.Class.Units.Knight import Knight
 from backend.Class.Units.Pikeman import Pikeman
 from backend.Class.Units.Crossbowman import Crossbowman
+from backend.Utils.convert_json import json_to_army
 from network.network_api import NetworkBridge
 
 
@@ -83,8 +84,8 @@ class Online(GameMode):
     def create_payload(self):
         army = {}
         for k in self.othersArmy.keys() :
-            army[k] = self.othersArmy[k].to_dict()
-        army[self.my_id] = self.my_army.to_dict()
+            army[k] = json_to_army(self.othersArmy[k])
+        army[self.my_id] = json_to_army(self.my_army)
         return str(army)
 
     @property
