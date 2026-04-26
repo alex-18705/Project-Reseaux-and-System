@@ -1,34 +1,91 @@
 #ifndef PROTOCOL_H
 #define PROTOCOL_H
-
+#include <stddef.h>
 #define MSG_TYPE_SIZE 32
 #define PEER_ID_SIZE 64
-#define JSON_SIZE 4096
+#define JSON_SIZE 65535
+
+#define TYPE_JOIN "JOIN"
+#define TYPE_BROADCAST "BROADCAST"
+#define TYPE_SEND_TO "SEND_TO"
+#define TYPE_REMOTE_EVENT "REMOTE_EVENT"
+#define TYPE_SHUTDOWN "SHUTDOWN"
+
+#define TYPE_OWNERSHIP_REQUEST "OWNERSHIP_REQUEST"
+#define TYPE_OWNERSHIP_TRANSFER "OWNERSHIP_TRANSFER"
+#define TYPE_OWNERSHIP_DENIED "OWNERSHIP_DENIED"
+#define TYPE_STATE_UPDATE "STATE_UPDATE"
+#define TYPE_OWNERSHIP_RETURN "OWNERSHIP_RETURN"
+
+typedef enum {
+    MSG_UNKNOWN = 0,
+    MSG_JOIN,
+    MSG_BROADCAST,
+    MSG_SEND_TO,
+    MSG_REMOTE_EVENT,
+    MSG_SHUTDOWN,
+
+    // Version 2
+    MSG_OWNERSHIP_REQUEST,
+    MSG_OWNERSHIP_TRANSFER,
+    MSG_OWNERSHIP_DENIED,
+    MSG_STATE_UPDATE,
+    MSG_OWNERSHIP_RETURN
+} MessageType;
 
 typedef struct {
+    MessageType kind;
     char type[MSG_TYPE_SIZE]; 
-    char event_json[JSON_SIZE]; // JSON object string for the event payload
-    int taill_json;
-    // struct sockaddr peer_addr; // For SEND_TO messages, the target peer's address
-    // struct sockaddr python_addr; // For messages from peer to Python, the source Python address
+    char sender_peer_id[PEER_ID_SIZE];
+    char target_peer_id[PEER_ID_SIZE];
+    char payload[JSON_SIZE]; 
+    // int taill_json;
 } Message;
 
-/* PARSE MESSAGE FROM PYTHON 
- * Example JSON:
- * {
- *   "type": "SEND_TO",
- *   "payload": {
- *     "target_peer_id": "peer-1",
- *     "event": { ... }
- *   }
- * }
+/*
+  Parse a JSON message into Message struct.
+  Expected format:
+ {
+    "type": "BROADCAST",
+    "sender__peer_id": "player_A",
+    "target_peer_id": "player_B",
+    "payload": {
+        "event_type": "STATE_UPDATE",
+        "entity_id": "unit_A1",
+        "state": {
+            "x": 1,
+            "y": 2,
+            "hp": 100
+        }
+    }
  */
 
-int parse_message(const char *json_str, Message *msg);
-void build_game_event(char *buffer, size_t buffer_size, const char *event_json); // Python local event to C -> peer
-void build_remote_event(char *buffer, size_t buffer_size, const char *event_json); // peer event to C -> Python
-// void build_peer_message(char *buffer, const char *peer_id, const char *event_json);
-// void build_peer_connected(char *buffer, const char *peer_id, const char *ip, int port);
-// void build_peer_disconnected(char *buffer, const char *peer_id);
+MessageType message_type_from_string(const char *type);
 
+int parse_message(const char *json_str, Message *msg);
+
+int build_message(char *buffer,size_t buffer_size,const char *type,const char *sender_id,const char *target_peer_id,const char *payload_json);
+
+// Version 1
+ int build_join_message(char *buffer, size_t buffer_size, const char *sender_id, const char *payload_json);
+
+int build_broadcast_message(char *buffer, size_t buffer_size, const char *sender_id, const char *payload_json);
+
+int build_send_to_message(char *buffer, size_t buffer_size, const char *sender_id, const char *target_peer_id, const char *payload_json);
+
+int build_remote_event_message(char *buffer, size_t buffer_size, const char *sender_id, const char *payload_json);
+
+int build_shutdown_message(char *buffer, size_t buffer_size, const char *sender_id);
+
+/* Version 2 */
+int build_ownership_request(char *buffer, size_t buffer_size, const char *sender_id, const char *target_peer_id, const char *payload_json);
+
+int build_ownership_transfer(char *buffer, size_t buffer_size, const char *sender_id, const char *target_peer_id, const char *payload_json);
+
+int build_ownership_denied(char *buffer, size_t buffer_size, const char *sender_id, const char *target_peer_id, const char *payload_json);
+
+int build_state_update(char *buffer, size_t buffer_size, const char *sender_id, const char *payload_json);
+
+int build_ownership_return(char *buffer, size_t buffer_size, const char *sender_id, const char *target_peer_id, const char *payload_json);
+ 
 #endif
