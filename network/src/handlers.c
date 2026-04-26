@@ -1,140 +1,152 @@
 #include <stdio.h>
 #include <string.h>
 
-#ifdef _WIN32
-#include <winsock2.h>
-#include <windows.h>
-#define CLOSESOCKET closesocket
-#else
-#include <unistd.h>
-#include <sys/socket.h>
-#define CLOSESOCKET close
-#endif
-
 #include "handlers.h"
+#include "ipc.h"
+#include "network.h"
 #include "peer_manage.h"
 #include "protocol.h"
 
+#ifdef _WIN32
+#include <winsock2.h>
+#else
+#include <arpa/inet.h>
+#endif
 
-/*
- * when a new peer connects, accept the connection, add to peer list, and notify Python
- */
-// void handle_new_peer(AppContext *ctx) {
-
-//     struct sockaddr_in client_addr;
-//     socklen_t addr_len = sizeof(client_addr);
-
-
-//     if (peer_fd == INVALID_FD) {
-//         perror("accept");
-//         return;
-//     }
-
-//     if (add_peer(ctx, peer_fd, &client_addr) < 0) {
-//         printf("Max peers reached\n");
-//         CLOSESOCKET(peer_fd);
-//         return;
-//     }
-
-//     char json_buf[BUF_SIZE];
-//     build_peer_connected(json_buf, peer_fd,inet_ntoa(client_addr.sin_addr),ntohs(client_addr.sin_port));
-//     send_to_python(ctx, json_buf);
-// }
-
-
-void handle_peer_data(AppContext *ctx) {
-    char buffer[BUF_SIZE];
-    struct sockaddr_in src_addr;
-    socklen_t addr_len = sizeof(src_addr);
-
-    int r = recvfrom(ctx->peer_fd, buffer, sizeof(buffer), 0, (struct sockaddr *)&src_addr, &addr_len);
-    if (r < 0) {
-        stop("recvfrom peer");
-    }
-
-    if (r == 0) {
-        printf("[C] Peer closed connection\n");
+static void remember_peer_from_message(AppContext *ctx, const Message *msg, const struct sockaddr_in *addr, socklen_t addr_len) {
+    if (!ctx || !msg || !addr) {
         return;
     }
-
-    printf("[C] recv from peer: %d bytes from %s:%d\n",
-           r,
-           inet_ntoa(src_addr.sin_addr),
-           ntohs(src_addr.sin_port));
-
-    if (!is_known_peer(ctx, &src_addr, addr_len)) {
-        printf("[C] unknown peer %s:%d, dropping packet\n",
-               inet_ntoa(src_addr.sin_addr),
-               ntohs(src_addr.sin_port));
-        return;
-    }
-
-    if (!ctx->has_python_addr) {
-        printf("[C] Python address unknown, dropping peer packet\n");
-        return;
-    }
-
-    printf("[C] forward to python: %s:%d\n",
-           inet_ntoa(ctx->python_addr.sin_addr),
-           ntohs(ctx->python_addr.sin_port));
-
-    int s = sendto(ctx->python_fd, buffer, r, 0, (struct sockaddr *)&ctx->python_addr, ctx->python_addr_len);
-    if (s < 0) {
-        stop("sendto python");
+    if (msg->sender_peer_id[0] != '\0') {
+        if (add_or_update_peer(ctx, msg->sender_peer_id, addr, addr_len) < 0) {
+            fprintf(stderr, "[handlers] unable to register peer '%s'\n", msg->sender_peer_id);
+        }
+    } else if (!is_known_peer(ctx, addr, addr_len)) {
+        if (add_peer(ctx, addr, addr_len) < 0) {
+            fprintf(stderr, "[handlers] unable to register peer by address\n");
+        }
     }
 }
 
+static int forward_to_python(AppContext *ctx, const char *buffer, size_t len) {
+    int sent;
+    if (!ctx || !buffer || len == 0) {
+        return -1;
+    }
+    sent = ipc_send_to_python(ctx, buffer, len);
+    if (sent < 0) {
+        perror("ipc_send_to_python");
+        return -1;
+    }
+    return sent;
+}
 
+static int forward_to_peers(AppContext *ctx, const Message *msg, const char *buffer, size_t len) {
+    if (!ctx || !msg || !buffer || len == 0) {
+        return -1;
+    }
 
-/* Event: Python send to C*/
+    switch (msg->kind) {
+        case MSG_JOIN:
+            if (msg->sender_peer_id[0] != '\0') {
+                strncpy(ctx->local_peer_id, msg->sender_peer_id, sizeof(ctx->local_peer_id) - 1);
+                ctx->local_peer_id[sizeof(ctx->local_peer_id) - 1] = '\0';
+            }
+            return broadcast_to_peers(ctx, buffer, len);
+
+        case MSG_SEND_TO:
+        case MSG_OWNERSHIP_REQUEST:
+        case MSG_OWNERSHIP_TRANSFER:
+        case MSG_OWNERSHIP_DENIED:
+        case MSG_OWNERSHIP_RETURN:
+            if (msg->target_peer_id[0] == '\0') {
+                fprintf(stderr, "[handlers] message '%s' has no target_peer_id\n", msg->type);
+                return -1;
+            }
+            return send_to_peer_id(ctx, msg->target_peer_id, buffer, len);
+
+        case MSG_SHUTDOWN:
+            ctx->running = 0;
+            return 0;
+        
+        case MSG_REMOTE_EVENT:
+            fprintf(stderr, "[handlers] REMOTE_EVENT should not be sent from Python to peers\n");
+            return -1;
+        
+        case MSG_BROADCAST:
+        case MSG_STATE_UPDATE:
+            return broadcast_to_peers(ctx, buffer, len);
+
+        case MSG_UNKNOWN:
+        default:
+            fprintf(stderr, "[handlers] unknown message type '%s'\n", msg->type);
+            return -1;
+    }
+}
+
+void handle_peer_data(AppContext *ctx) {
+    char buffer[BUF_SIZE + 1];
+    struct sockaddr_in src_addr;
+    socklen_t src_addr_len = sizeof(src_addr);
+    Message msg;
+    int received;
+
+    if (!ctx) {
+        return;
+    }
+
+    received = udp_recv_from_addr(ctx->peer_fd, buffer, sizeof(buffer), &src_addr, &src_addr_len);
+    if (received < 0) {
+         perror("recvfrom peer");
+        return;
+    }
+    if (received == 0) {
+        return;
+    }
+
+    buffer[received] = '\0';
+
+    if (parse_message(buffer, &msg) != 0) {
+        fprintf(stderr, "[handlers] dropping invalid packet from unknown peer %s:%u\n", inet_ntoa(src_addr.sin_addr), (unsigned)ntohs(src_addr.sin_port));
+        return;
+    }
+
+    remember_peer_from_message(ctx, &msg, &src_addr, src_addr_len);
+    if (ctx->python_fd == INVALID_FD){
+        fprintf(stderr, "[handlers] Python IPC socket is not connected\n");
+        return;
+    }
+
+    if (forward_to_python(ctx, buffer, (size_t)received) < 0) {
+        stop("send to python");
+    }
+}
+
 void handle_python_data(AppContext *ctx) {
     char buffer[BUF_SIZE + 1];
-    struct sockaddr_in src_addr ;
-    socklen_t addr_len = sizeof(src_addr);
-    int r = recvfrom(ctx->python_fd, buffer, sizeof(buffer), 0, (struct sockaddr*)&src_addr, &addr_len);
-    if (r<0){
-        stop ("recvfrom python");
-    }
+    Message msg;
+    int received;
 
-    if (r == 0) {
-        printf("[C] Python closed connection\n");
+    if (!ctx) {
         return;
     }
 
-    buffer[r] = '\0';
-
-    printf("[C] recv from python: %d bytes from %s:%d\n",
-           r,
-           inet_ntoa(src_addr.sin_addr),
-           ntohs(src_addr.sin_port));
-    
-    ctx->python_addr = src_addr;
-    ctx->python_addr_len = addr_len;
-    ctx->has_python_addr = 1;
-
-    /* Registration packet sent by NetworkBridge.connect():
-     * keep python_addr, but do not forward it to the remote proxy.
-     */
-    if (r == 1 && buffer[0] == '\n') {
-        printf("[C] python registration packet received, not forwarding\n");
-        return;
+    received = ipc_recv_from_python(ctx, buffer, sizeof(buffer));
+    if (received < 0) {
+        stop("recv from python");
     }
-
-    if (r >= 10 && strstr(buffer, "\"type\":\"SHUTDOWN\"") != NULL) {
-        printf("[C] shutdown requested by python\n");
+    if (received == 0) {
+        printf("[handlers] Python disconnected\n");
         ctx->running = 0;
         return;
     }
 
-    if (ctx->peer_count == 0) {
-        printf("[C] No registered peers, dropping python packet\n");
+    if (parse_message(buffer, &msg) != 0) {
+        fprintf(stderr, "[handlers] invalid message from Python: %s\n", buffer);
         return;
     }
 
-    printf("[C] broadcasting to %d peer(s)\n", ctx->peer_count);
-
-    if (broadcast_to_peers(ctx, buffer, (size_t)r) < 0) {
-        stop("broadcast to peers");
+    if (forward_to_peers(ctx, &msg, buffer, (size_t)received) < 0) {
+        fprintf(stderr, "[handlers] unable to forward message type '%s'\n", msg.type);
     }
-
 }
