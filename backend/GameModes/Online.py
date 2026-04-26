@@ -25,31 +25,25 @@ class Online(GameMode):
         self.frame_delay = 0.05  # sleep duration when not using pygame
         self.verbose = True
         self.my_army = None
-        self.othersArmy = []
+        self.othersArmy = {} # {"id" : "army"}
         self.network_bridge = NetworkBridge()
         self.know_ip= set()
-
-    def add_army(self,value):
-        value.gameMode = self
-        self.othersArmy.append(value)
-
-    def remove_army(self,value):
-        self.othersArmy.remove(value)
+        self.my_id = str(uuid.uuid4())
 
     def flat(self):
         new = Army()
         list_units = []
-        for a in self.othersArmy:
-            new.general = a.general
-            new.gameMode = a.gameMode
-            list_units.append(a.units)
+        for k in self.othersArmy.keys():
+            new.general = self.othersArmy[k].general
+            new.gameMode = self.othersArmy[k].gameMode
+            list_units.append(self.othersArmy[k].units)
         new.units = [u for sublist in list_units for u in sublist]
         return new
 
     def update_army(self,global_army):
-        for a in self.othersArmy:
-            for u in a.units:
-                if u not in global_army.units: a.units.remove(u)
+        for k in self.othersArmy.keys():
+            for u in self.othersArmy[k].units:
+                if u not in global_army.units: self.othersArmy[k].units.remove(u)
 
     def continue_condition(self):
         return True
@@ -62,15 +56,22 @@ class Online(GameMode):
         return False
 
     def run(self):
+        """
         messages = self.network_bridge.get_updates()
         for message in messages:
+
             #get ip, ajouter dans know_ip si deja pas présente
             #
             pass
+        """
 
         all = self.flat()
         self.army1.fight(self.map, otherArmy=all)
         self.update_army(all)
+
+        print(self.create_payload())
+
+
 
     def launch(self):
         self.affichage.initialiser()
@@ -78,6 +79,13 @@ class Online(GameMode):
 
     def save(self):
         pass
+
+    def create_payload(self):
+        army = {}
+        for k in self.othersArmy.keys() :
+            army[k] = self.othersArmy[k].to_dict()
+        army[self.my_id] = self.my_army.to_dict()
+        return str(army)
 
     @property
     def army1(self):
@@ -91,14 +99,14 @@ class Online(GameMode):
     @property
     def army2(self):
         try :
-            return self.othersArmy[0]
+            return self.othersArmy[self.othersArmy.keys()[0]]
         except:
             return Army()
 
     @army2.setter
     def army2(self, value):
         value.gameMode = self
-        self.othersArmy.append(value)
+        #self.othersArmy.append(value)
 
     def to_dict(self):
         """Serialize battle state to dictionary for saving."""
