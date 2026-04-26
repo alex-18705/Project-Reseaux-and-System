@@ -2,6 +2,7 @@ import json
 
 from backend.Class.Army import Army
 from backend.Class.Map import Map
+from backend.Utils.class_by_name import GENERAL_REGISTRY
 from backend.Utils.file_loader import load_mirrored_army_from_file, load_map_from_file
 
 from backend.Class.Units.Castle import Castle
@@ -51,7 +52,7 @@ def unit_to_dict(unit):
 
 def army_to_dict(army):
     return {
-        "uid": army.uid,
+        "general" : army.general.__class__.__name__,
         "units": [unit_to_dict(u) for u in army.units],
     }
 
@@ -81,7 +82,7 @@ def army_to_json(army):
 def json_to_army(data_army):
     army_data = json.loads(data_army)
     army = Army()
-    army.uid = army_data["uid"]
+    army.general = GENERAL_REGISTRY[army_data["general"].lower()]()
     for d in army_data["units"]:
         cls = globals().get(d["type"])
         if cls is None:

@@ -1,3 +1,4 @@
+import ast
 import json
 import os
 import uuid
@@ -9,7 +10,7 @@ from backend.Utils.class_by_name import general_from_name
 from backend.Class.Units.Knight import Knight
 from backend.Class.Units.Pikeman import Pikeman
 from backend.Class.Units.Crossbowman import Crossbowman
-from backend.Utils.convert_json import json_to_army
+from backend.Utils.convert_json import json_to_army, army_to_json, army_to_dict
 from network.network_api import NetworkBridge
 
 
@@ -65,6 +66,12 @@ class Online(GameMode):
             #
             pass
         """
+        print("reponse : ")
+        message = input()
+
+        self.load_payload(message)
+
+
 
         all = self.flat()
         self.army1.fight(self.map, otherArmy=all)
@@ -81,11 +88,21 @@ class Online(GameMode):
     def save(self):
         pass
 
+    def load_payload(self, json_payload):
+        print("ef", json_payload)
+        army = ast.literal_eval(json_payload)
+        print(army)
+        for k in army.keys():
+            if k == self.my_id:
+                self.my_army = json_to_army(army[k])
+            else:
+                self.othersArmy[k] = json_to_army(army[k])
+
     def create_payload(self):
         army = {}
         for k in self.othersArmy.keys() :
-            army[k] = json_to_army(self.othersArmy[k])
-        army[self.my_id] = json_to_army(self.my_army)
+            army[k] = army_to_json(self.othersArmy[k])
+        army[self.my_id] = army_to_json(self.my_army)
         return str(army)
 
     @property
