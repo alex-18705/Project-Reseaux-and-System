@@ -80,7 +80,10 @@ def army_to_json(army):
     return data
 
 def json_to_army(data_army):
-    army_data = json.loads(data_army)
+    if isinstance(data_army, str):
+        army_data = json.loads(data_army)
+    else:
+        army_data = data_army
     army = Army()
     army.general = GENERAL_REGISTRY[army_data["general"].lower()]()
     for d in army_data["units"]:
@@ -108,7 +111,10 @@ def map_to_json(map_obj):
 
 
 def json_to_map(data_map):
-    map_data = json.loads(data_map)
+    if isinstance(data_map, str):
+        map_data = json.loads(data_map)
+    else:
+        map_data = data_map
     map_obj = Map(
         width=map_data["width"],
         height=map_data["height"],

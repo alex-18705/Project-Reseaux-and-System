@@ -19,69 +19,134 @@ from network.network_api import NetworkBridge
 
 class Online(GameMode):
 
-    def __init__(self):
+    def __init__(self, py_port=5000, lan_port=6000, remote_port=6000, is_host=True):
         super().__init__()
         self.max_tick = None
         self.tick = 0
-        self.tick_delay = 1.0  # seconds between simulation ticks
-        self.frame_delay = 0.05  # sleep duration when not using pygame
+        self.tick_delay = 1.0
+        self.frame_delay = 0.05
         self.verbose = True
         self.my_army = None
-        self.othersArmy = {} # {"id" : "army"}
-        self.network_bridge = NetworkBridge()
+        self.othersArmy = {} 
+        self.network_bridge = NetworkBridge(port=py_port)
         self.know_ip= set()
         self.my_id = str(uuid.uuid4())
+        self.lan_port = lan_port
+        self.remote_port = remote_port
+        self.is_host = is_host # Host is Blue (P1), Joiner is Red (P2)
+        self.has_started = False
 
     def flat(self):
         new = Army()
-        list_units = []
-        for k in self.othersArmy.keys():
-            new.general = self.othersArmy[k].general
-            new.gameMode = self.othersArmy[k].gameMode
-            list_units.append(self.othersArmy[k].units)
-        new.units = [u for sublist in list_units for u in sublist]
+        all_units = []
+        for army_id in self.othersArmy:
+            all_units.extend(self.othersArmy[army_id].units)
+        new.units = all_units
         return new
-
-    def update_army(self,global_army):
-        for k in self.othersArmy.keys():
-            for u in self.othersArmy[k].units:
-                if u not in global_army.units: self.othersArmy[k].units.remove(u)
 
     def continue_condition(self):
         return True
 
     def end(self):
+        # Fermeture de l'affichage
         if hasattr(self.affichage, "shutdown"):
             self.affichage.shutdown()
+        
+        # Fermeture de la connexion réseau et du Proxy C
+        if hasattr(self, "network_bridge"):
+            print("[Online] Fermeture de la connexion réseau...")
+            self.network_bridge.disconnect()
 
-    def message_recieve(self):
-        return False
+    def message_receive(self):
+        """
+        Récupère les mises à jour du pont réseau et met à jour l'état des autres armées.
+        Découvre également automatiquement les nouveaux pairs.
+        """
+        messages = self.network_bridge.get_updates()
+        updated = False
+        for msg in messages:
+            # Découverte automatique : ajouter l'expéditeur à know_ip s'il n'y est pas déjà
+            sender_ip = msg.get("_sender_ip")
+            if sender_ip and sender_ip not in self.know_ip:
+                print(f"[Online] Nouveau pair découvert : {sender_ip}")
+                self.know_ip.add(sender_ip)
+
+            # Le payload envoyé est un dictionnaire {id: army_data}
+            payload = msg.get("payload", {})
+            if isinstance(payload, dict):
+                for army_id, army_data in payload.items():
+                    if army_id != self.my_id:
+                        # Utiliser le chargement basé sur le dictionnaire
+                        try:
+                            self.othersArmy[army_id] = json_to_army(army_data)
+                        except Exception as e:
+                            print(f"[Online] Erreur lors du chargement de l'armée de {army_id} : {e}")
+                        updated = True
+        return updated
 
     def run(self):
         """
-        messages = self.network_bridge.get_updates()
-        for message in messages:
-
-            #get ip, ajouter dans know_ip si deja pas présente
-            #
-            pass
+        Étape principale de la simulation pour le mode Online :
+        1. Recevoir les mises à jour des pairs
+        2. Si aucun pair, attendre et afficher 'En attente...'
+        3. Si pair trouvé, exécuter la simulation
+        4. Diffuser l'état local aux pairs
         """
-        print("reponse : ")
-        message = input()
+        self.message_receive()
 
-        self.load_payload(message)
-        all = self.flat()
-        self.my_army.fight(self.map, otherArmy=all)
-        self.update_army(all)
-        response = self.create_payload()
+        if not self.othersArmy:
+            if self.tick % 100 == 0:
+                print("En attente d'un autre joueur...")
+            # Diffuser quand même notre présence pour que l'autre puisse nous trouver
+            self._broadcast_state()
+            return
 
-        print(response)
+        if not self.has_started:
+            print("Joueur rejoint ! Début de la bataille.")
+            self.has_started = True
 
+        # Exécuter la logique de combat pour NOS unités
+        all_enemies = self.flat()
+        self.my_army.fight(self.map, otherArmy=all_enemies)
+        
+        # Incrémenter le tick
+        self.tick += 1
+        
+        self._broadcast_state()
 
+    def _broadcast_state(self):
+        payload = self.create_payload()
+        for ip in self.know_ip:
+            self.network_bridge.send_message("SYNC_UPDATE", ip, payload)
+
+    @property
+    def army1(self):
+        # Army 1 is ALWAYS the Left (Blue) side
+        if self.is_host:
+            return self.my_army
+        else:
+            return self.othersArmy.get(list(self.othersArmy.keys())[0], Army()) if self.othersArmy else Army()
+
+    @property
+    def army2(self):
+        # Army 2 is ALWAYS the Right (Red) side
+        if not self.is_host:
+            return self.my_army
+        else:
+            return self.othersArmy.get(list(self.othersArmy.keys())[0], Army()) if self.othersArmy else Army()
 
     def launch(self):
+        # If we are the joiner, mirror our units to the right immediately
+        if not self.is_host and self.my_army:
+            print("[Online] Mirroring army to the right side...")
+            for unit in self.my_army.units:
+                if unit.position:
+                    new_x = (self.map.width - 1) - unit.position[0]
+                    unit.position = (new_x, unit.position[1])
+
         self.affichage.initialiser()
-        self.network_bridge.connect()
+        remote_ip = list(self.know_ip)[0] if self.know_ip else None
+        self.network_bridge.connect(remote_ip=remote_ip, lan_port=self.lan_port, remote_port=self.remote_port)
 
     def save(self):
         pass
@@ -97,32 +162,19 @@ class Online(GameMode):
                 self.othersArmy[k] = json_to_army(army[k])
 
     def create_payload(self):
-        army = {}
-        for k in self.othersArmy.keys() :
-            army[k] = army_to_json(self.othersArmy[k])
-        army[self.my_id] = army_to_json(self.my_army)
-        return str(army)
-
-    @property
-    def army1(self):
-        return self.my_army
+        # Only send OUR army state to avoid redundant data
+        return {
+            self.my_id: army_to_dict(self.my_army)
+        }
 
     @army1.setter
     def army1(self, value):
         value.gameMode = self
         self.my_army = value
 
-    @property
-    def army2(self):
-        try :
-            return self.othersArmy[self.othersArmy.keys()[0]]
-        except:
-            return Army()
-
     @army2.setter
     def army2(self, value):
         value.gameMode = self
-        #self.othersArmy.append(value)
 
     def to_dict(self):
         """Serialize battle state to dictionary for saving."""

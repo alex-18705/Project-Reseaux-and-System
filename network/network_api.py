@@ -35,6 +35,9 @@ class NetworkBridge:
         self.incoming_queue = queue.Queue()
         self.receive_thread = None
 
+        # Handle to the Proxy C subprocess
+        self.proxy_process = None
+
         # Numéro de séquence sortant : incrémenté à chaque envoi
         self._seq_out = 0
 
@@ -43,10 +46,40 @@ class NetworkBridge:
         self._seq_in = {}
 
     # ---- Connexion ----
-    def connect(self):
-        #Demarrage du programme C
+    def connect(self, remote_ip=None, lan_port=6000, remote_port=6000):
+        """Ouvre le socket UDP local, démarre le proxy C et le thread de réception."""
+        
+        # Démarrage automatique du programme C Proxy
+        try:
+            import subprocess
+            import os
+            
+            # Paths relative to project root or current dir
+            proxy_path = os.path.join("network", "proxy_udp.exe")
+            if not os.path.exists(proxy_path):
+                # Try local dir if not in network/
+                proxy_path = "proxy_udp.exe"
 
-        """Ouvre le socket UDP local et démarre le thread de réception."""
+            args = [proxy_path]
+            if remote_ip:
+                args.append(remote_ip)
+            else:
+                args.append("server")
+            
+            # Use provided ports
+            args.append(str(self.port))      # py_port
+            args.append(str(lan_port))     # lan_listen_port
+            args.append(str(remote_port))  # remote_dest_port
+
+            print(f"[NetworkBridge] Starting Proxy C: {args}")
+            self.proxy_process = subprocess.Popen(args, creationflags=subprocess.CREATE_NEW_CONSOLE if os.name == 'nt' else 0)
+        except Exception as e:
+            print(f"[NetworkBridge] Warning: Could not start Proxy C automatically: {e}")
+
+        # Give Proxy C a moment to bind to its ports
+        import time
+        time.sleep(0.5)
+
         self.sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
         # Timeout de 1 s : le thread peut vérifier is_connected périodiquement
         self.sock.settimeout(1.0)
@@ -83,6 +116,8 @@ class NetworkBridge:
 
                 try:
                     msg = json.loads(ligne)
+                    # Include sender IP for peer discovery
+                    msg["_sender_ip"] = addr[0]
                 except json.JSONDecodeError:
                     # Paquet corrompu ou tronqué (fragmentation UDP) → ignorer
                     print(f"[NetworkBridge] Erreur JSON ignorée "
@@ -107,6 +142,10 @@ class NetworkBridge:
 
             except socket.timeout:
                 # Timeout normal : reboucler et vérifier is_connected
+                continue
+            except ConnectionResetError:
+                # Sur Windows, se produit si le Proxy n'est pas encore prêt (ICMP Port Unreachable)
+                # On ignore et on continue d'écouter
                 continue
             except OSError:
                 # Socket fermé par disconnect() → sortie propre
@@ -188,6 +227,16 @@ class NetworkBridge:
         timeout → puis on ferme le socket (évite WinError 10038).
         """
         self.is_connected = False   # Signal au thread de s'arrêter
+        
+        # Terminer le processus Proxy C s'il est en cours
+        if self.proxy_process:
+            try:
+                self.proxy_process.terminate()
+                print("[NetworkBridge] Proxy C terminé.")
+            except Exception as e:
+                print(f"[NetworkBridge] Erreur lors de la fermeture du Proxy C : {e}")
+            self.proxy_process = None
+
         if self.sock:
             try:
                 self.sock.close()

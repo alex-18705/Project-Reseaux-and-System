@@ -78,6 +78,18 @@ def main():
         "--join", type=str,
         help="--join <ip>"
     )
+    run_parser.add_argument(
+        "--py_port", type=int, default=5000,
+        help="Local port for Python-Proxy communication"
+    )
+    run_parser.add_argument(
+        "--lan_port", type=int, default=6000,
+        help="Local port for LAN communication"
+    )
+    run_parser.add_argument(
+        "--remote_port", type=int, default=6000,
+        help="Target port on the remote machine"
+    )
 
     # ==================== TestOnline ====================
     run_parser = subparsers.add_parser("testOnline", help="Test online")
@@ -94,7 +106,14 @@ def main():
 
     # ==================== MODE:  ONLINE ====================
     if args.mode == "online":
-        gameMode = Online()
+        # If args.join is None, we are the host (Blue)
+        is_host = args.join is None
+        gameMode = Online(
+            py_port=args.py_port,
+            lan_port=args.lan_port,
+            remote_port=args.remote_port,
+            is_host=is_host
+        )
 
         if args.join : gameMode.know_ip.add(args.join)
 
