@@ -82,6 +82,8 @@ class Online(GameMode):
                         except Exception as e:
                             print(f"[Online] Erreur lors du chargement de l'armée de {army_id} : {e}")
                         updated = True
+                    else :
+                        self.my_army = json_to_army(army_data)
         return updated
 
     def run(self):
@@ -108,6 +110,7 @@ class Online(GameMode):
         # Exécuter la logique de combat pour NOS unités
         all_enemies = self.flat()
         self.my_army.fight(self.map, otherArmy=all_enemies)
+        self.update_dead(all_enemies)
         
         # Incrémenter le tick
         self.tick += 1
@@ -118,6 +121,12 @@ class Online(GameMode):
         payload = self.create_payload()
         for ip in self.know_ip:
             self.network_bridge.send_message("SYNC_UPDATE", ip, payload)
+
+    def update_dead(self, all_enemies):
+        for army in self.othersArmy.values():
+            for u in range(army.units):
+                if army.units[u] not in all_enemies.units:
+                    del army.units[u]
 
     @property
     def army1(self):
