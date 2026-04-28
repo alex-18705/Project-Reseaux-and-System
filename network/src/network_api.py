@@ -50,22 +50,21 @@ class NetworkBridge:
 
     # ---- Connexion ----
     def connect(self):
-        """Ouvre le socket UDP local et démarre le thread de réception."""
-        self.sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        """Ouvre le socket TCP local et démarre le thread de réception."""
+        self.sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         # Timeout de 1 s : le thread peut vérifier is_connected périodiquement
         self.sock.settimeout(1.0)
         self.server_addr = (self.host, self.port)
-        self.is_connected = True
         
         """Démarrage du program C"""
         if self.auto_start and self.proxy_cmd:
             self.proxy_process = subprocess.Popen(self.proxy_cmd)
             time.sleep(1.0)
         
-        # Premier paquet pour que le Proxy C enregistre notre port éphémère
-        self.sock.sendto(b"\n", self.server_addr)
+        self.sock.connect(self.server_addr)
+        self.is_connected = True
 
-        print("[NetworkBridge] Prêt en UDP ! (Proxy C sur port {})".format(self.port))
+        print("[NetworkBridge] Prêt en TCP IPC ! (Proxy C sur port {})".format(self.port))
 
         # Lancer le thread de réception en arrière-plan (daemon = stoppe avec le jeu)
         self.receive_thread = threading.Thread(target=self._listen_loop, daemon=True)
@@ -82,7 +81,7 @@ class NetworkBridge:
         """
         while self.is_connected:
             try:
-                data, addr = self.sock.recvfrom(65535)
+                data = self.sock.recv(65535)
                 if not data:
                     continue
 
@@ -128,7 +127,7 @@ class NetworkBridge:
         print("[NetworkBridge] Thread de réception arrêté.")
 
     # ---- Envoi de messages ----
-    def send_message(self, msg_type, payload_dict=None):
+    def send_message(self, msg_type, payload_dict=None, sender_id="", target_peer_id=""):
         """
         Envoie un message JSON vers le Proxy C en UDP.
 
@@ -154,13 +153,15 @@ class NetworkBridge:
         message = {
             "seq":     self._seq_out,
             "type":    msg_type,
+            "sender_id": sender_id,
+            "target_peer_id": target_peer_id,
             "payload": payload_dict
         }
 
         try:
             # JSON compact : pas d'espaces → taille minimale
             donnees = json.dumps(message, separators=(',', ':')) + '\n'
-            self.sock.sendto(donnees.encode('utf-8'), self.server_addr)
+            self.sock.sendall(donnees.encode('utf-8'))
 
             # Avertir si le datagramme dépasse le MTU standard (1500 octets)
             taille = len(donnees.encode('utf-8'))

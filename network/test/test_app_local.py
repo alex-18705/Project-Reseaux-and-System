@@ -18,7 +18,7 @@ def main():
         host=host, 
         port=port,
         auto_start = True,
-        proxy_cmd = ["../src/proxy.exe", "5000", "9000", "127.0.0.1", "9001"]
+        proxy_cmd = ["../src/proxy.exe", "5000", "9000", "127.0.0.1", "9001", "127.0.0.1", "9002"]
     )
     bridge.connect()
 
