@@ -10,6 +10,10 @@ from backend.Class.Units.Monk import Monk
 from backend.Class.Units.Pikeman import Pikeman
 
 GENERAL_REGISTRY: dict[str, type] = {
+            str(CaptainBraindead.__class__.__name__) : CaptainBraindead,
+            str(ColonelArchBtw.__class__.__name__) : ColonelArchBtw,
+            str(MajorDaft.__class__.__name__) : MajorDaft,
+            str(GeneralClever.__class__.__name__) : GeneralClever,
             "captainbraindead": CaptainBraindead,
             "majordaft": MajorDaft,
             "generalclever": GeneralClever,

@@ -27,14 +27,73 @@ Legend (example):
 
 This loader returns a tuple of Army instance and optionally lists of spawned units.
 
-def load_mirrored_army_from_file(path: str) -> tuple[Army, Army] :
-    #Cette fonction recupère un ficher, structurer correctement et génère une armée et une armée mirroir
+def load_army_from_file(path: str) -> Army:
+    #Cette fonction recupère un ficher, structure correctement et génère une armée
     pass
 """
 from backend.Class.Army import Army
 
 
+def load_army_from_file(path: str) -> Army:
+    army = Army()
+    with open(path, "r", encoding="utf-8") as f:
 
+        # 1. RÉCUPÉRATION DES DIMENSIONS
+
+        line_header = f.readline().strip()
+        if not line_header:
+            return army
+
+        # 2. PARCOURS DE LA GRILLE (Ligne par ligne)
+
+        for y, line in enumerate(f):
+            line = line.replace("\n", "")  # On nettoie la ligne des retours à la ligne (\n) et des espaces
+
+            for x, char in enumerate(line):
+
+                # On vérifie si le caractère correspond à une unité connue
+                unit_class = None
+                if char == 'K':
+                    unit_class = Knight
+                elif char == 'C':
+                    unit_class = Crossbowman
+                elif char == 'P':
+                    unit_class = Pikeman
+                elif char == 'H':
+                    unit_class = Castle
+                elif char == 'E':
+                    unit_class = Elephant
+                elif char == 'M':
+                    unit_class = Monk
+                if unit_class:
+                    u1 = unit_class((x, y))
+
+                    army.add_unit(u1)
+
+    return army
+
+
+
+"""
+Army file format (example):
+18;3
+K..............P..
+..C..P....K
+..................
+
+
+Legend (example):
+  . = empty plain tile
+  K = Knight
+  P = Pikeman
+  C = Crossbowman
+
+This loader returns a tuple of Army instance and optionally lists of spawned units.
+
+def load_mirrored_army_from_file(path: str) -> tuple[Army, Army] :
+    #Cette fonction recupère un ficher, structurer correctement et génère une armée et une armée mirroir
+    pass
+"""
 def load_mirrored_army_from_file(path: str) -> tuple[Army, Army]:
     army1 = Army()
     army2 = Army()

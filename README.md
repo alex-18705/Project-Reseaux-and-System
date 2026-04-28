@@ -21,8 +21,13 @@ https://drive.google.com/file/d/1T1PBgwUbtoPRrT4uYkOi8iOA9RJ1wf_O/view?usp=drive
 
 
 ## Usage
+### Online Battle Commands
+- `python main.py online --create --pygame --army_file army\*.army --map_file map\*.map --general MajorDaft`
+  Crée une bataille et attend que quelqu'un se connecte 
+- `python main.py online --join 192.168.10.3 --curses --army_file army\*.army --map_file map\*.map --general MajorDaft`  
+  Rejoin une bataille auquel participe l'ordinateur avec l'ip 192.168.10.3.
 
-### Battle Commands
+### Offline Battle Commands
 
 - `python main.py run --pygame --army_file army\*.army --map_file map\*.map --general1 (choose general ex: MajorDaft) --general2 (choose general ex: MajorDaft)`  
   Launches a **pygame battle** (60 FPS display).  
@@ -31,13 +36,6 @@ https://drive.google.com/file/d/1T1PBgwUbtoPRrT4uYkOi8iOA9RJ1wf_O/view?usp=drive
   Same setup but with the **ASCII / curses terminal view**.  
   Requires a curses-capable terminal  
   (`pip install windows-curses` on Windows).
-
-- `python main.py tournament --generals CaptainBraindead,MajorDaft,GeneralClever --scenarios classique,lanchester_knight --repeats 3 --headless --html`  
-  Runs an **automated tournament** in headless mode (fast, no display) and emits an  
-  **HTML report** under `tournament_reports/`.
-  
- - `python main.py plot DAFT PlotLanchester Lanchester "[Knight,Crossbow]" "range(1,100)" --repeat 10 --graph reports/lanchester.png`  
-  Runs a **Lanchester’s Law analysis**, plotting repeated simulations for Knight vs Crossbow forces and saving the resulting graph to `reports/lanchester.png`.
 
 ---
 

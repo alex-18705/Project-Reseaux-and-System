@@ -1,3 +1,4 @@
+import uuid
 from math import sin
 from math import cos
 
@@ -14,8 +15,18 @@ from backend.Class.Units.Unit import Unit
 class Army:
     def __init__(self):
         self.gameMode = None
-        self.general = None
+        self.__general = None
         self.units = []  # list of Unit objects
+
+    @property
+    def general(self):
+        return self.__general
+
+    @general.setter
+    def general(self, value):
+        value.army = self
+        self.__general = value
+
 
     def add_unit(self, unit: Unit):
         unit.army = self
@@ -29,6 +40,14 @@ class Army:
 
     def isEmpty(self):
         return len(self.living_units()) <= 0
+
+    def living_units_id(self):
+        return [u.id for u in self.units if u.is_alive()]
+
+    def get_unit_by_id(self, id):
+        for u in self.units:
+            if u.id == id: return u
+        return None
 
     def living_units(self):
         return [u for u in self.units if u.is_alive()]
@@ -181,8 +200,8 @@ class Army:
                 if target.hp < 0:
                     target.hp = 0
 
-                unit.last_attacked = target
-                target.last_attacker = unit
+                unit.last_attacked_id = target.id
+                target.last_attacker_id = unit.id
                 unit.cooldown = unit.reload_time
 
             # DÉPLACEMENT
@@ -202,16 +221,16 @@ class Army:
             #Monk healing
             elif action.kind == "heal" :
                 target.hp = min(target.max_hp, target.hp+unit.attack)
-                unit.last_attacked = "heal"
+                unit.last_attacked_id = "heal"
             #Monk convert
             elif action.kind == "conversion":
                 if target in otherArmy.living_units() :
                     otherArmy.remove_unit(target)
                     self.add_unit(target)
                     unit.cooldown = unit.reload_time
-                    target.last_attacker = None
-                    target.last_attacked = None
-                    unit.last_attacked = "conversion"
+                    target.last_attacker_id = None
+                    target.last_attacked_id = None
+                    unit.last_attacked_id = "conversion"
 
             if isinstance(unit, Elephant) :
                 for enemy in otherArmy.living_units():
@@ -219,17 +238,13 @@ class Army:
                         enemy.hp-=unit.attack
 
     def fight(self, map: Map, otherArmy):
-        # print("me",len(self.living_units()), len(otherArmy.living_units()))
 
         targets = self.general.getTargets(map, otherArmy)
-        #print("me", len(self.living_units()), len(otherArmy.living_units()))
-        #print("targets" ,targets)
+
         orders = self.testTargets(targets, map, otherArmy)
-        #print("me", len(self.living_units()), len(otherArmy.living_units()))
-        #print("orders", orders)
+
         self.execOrder(orders, otherArmy)
-        #print("me", len(self.living_units()), len(otherArmy.living_units()))
-        #print("executer")
+
 
 
     def test_collision(self,vector,unit, object):
