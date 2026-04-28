@@ -131,19 +131,11 @@ class Online(GameMode):
 
     @property
     def army1(self):
-        # Army 1 is ALWAYS the Left (Blue) side
-        if self.is_first:
-            return self.my_army
-        else:
-            return self.othersArmy.get(list(self.othersArmy.keys())[0], Army()) if self.othersArmy else Army()
+        return self.my_army
 
     @property
     def army2(self):
-        # Army 2 is ALWAYS the Right (Red) side
-        if not self.is_first:
-            return self.my_army
-        else:
-            return self.othersArmy.get(list(self.othersArmy.keys())[0], Army()) if self.othersArmy else Army()
+        return self.flat()
 
     def launch(self):
         # If we are the joiner, mirror our units to the right immediately
@@ -173,9 +165,10 @@ class Online(GameMode):
 
     def create_payload(self):
         # Only send OUR army state to avoid redundant data
-        return {
-            self.my_id: army_to_dict(self.my_army)
-        }
+        result= self.othersArmy.copy()
+        result[self.my_id] = self.my_army
+        return result
+
 
     @army1.setter
     def army1(self, value):
