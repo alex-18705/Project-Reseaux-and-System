@@ -107,12 +107,12 @@ def main():
     # ==================== MODE:  ONLINE ====================
     if args.mode == "online":
         # If args.join is None, we are the host (Blue)
-        is_host = args.join is None
+        is_first = args.join is None
         gameMode = Online(
             py_port=args.py_port,
             lan_port=args.lan_port,
             remote_port=args.remote_port,
-            is_host=is_host
+            is_first=is_first
         )
 
         if args.join : gameMode.know_ip.add(args.join)
