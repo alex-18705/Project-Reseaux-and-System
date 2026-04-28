@@ -110,7 +110,6 @@ class Online(GameMode):
         # Exécuter la logique de combat pour NOS unités
         all_enemies = self.flat()
         self.my_army.fight(self.map, otherArmy=all_enemies)
-        print(len(all_enemies.living_units()))
         self.update_dead(all_enemies)
         
         # Incrémenter le tick
