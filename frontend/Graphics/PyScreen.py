@@ -92,6 +92,26 @@ class PyScreen(Affichage):
         # Variable pour centrer la caméra initialement
         self.camera_centered = False
         self.current_map_bounds = (0, 0, 0, 0) # (x_max, x_min, y_max, y_min)
+        self.player_colors = {}
+        self.color_palette = [
+            (50, 100, 255),
+            (255, 50, 50),
+            (40, 200, 120),
+            (240, 180, 40),
+            (180, 80, 240),
+            (40, 210, 220),
+            (255, 120, 40),
+            (230, 230, 80),
+        ]
+
+    def _color_for_unit(self, unit, fallback_color):
+        owner_id = getattr(unit, "network_owner_id", None)
+        if owner_id is None:
+            return fallback_color
+        if owner_id not in self.player_colors:
+            index = len(self.player_colors) % len(self.color_palette)
+            self.player_colors[owner_id] = self.color_palette[index]
+        return self.player_colors[owner_id]
 
     def _get_interpolated_position(self, unit):
         """Obtenir la position interpolée pour une animation fluide."""
@@ -236,11 +256,11 @@ class PyScreen(Affichage):
 
         # Dessiner les unités de l'armée 1
         for unit in army1.living_units():
-            self._draw_unit(unit, (50, 100, 255))
+            self._draw_unit(unit, self._color_for_unit(unit, (50, 100, 255)))
 
         # Dessiner les unités de l'armée 2
         for unit in army2.living_units():
-            self._draw_unit(unit, (255, 50, 50))
+            self._draw_unit(unit, self._color_for_unit(unit, (255, 50, 50)))
 
         # Dessiner les obstacles
         for unit in map.obstacles:
@@ -483,13 +503,13 @@ class PyScreen(Affichage):
         for unit in army1.living_units():
             if unit.position is not None:
                 mx, my = get_mini_iso(*unit.position)
-                pygame.draw.circle(minimap_surface, (50, 100, 255), (int(mx), int(my)), 2)
+                pygame.draw.circle(minimap_surface, self._color_for_unit(unit, (50, 100, 255)), (int(mx), int(my)), 2)
 
         # Dessiner les unités de l'armée 2
         for unit in army2.living_units():
             if unit.position is not None:
                 mx, my = get_mini_iso(*unit.position)
-                pygame.draw.circle(minimap_surface, (255, 50, 50), (int(mx), int(my)), 2)
+                pygame.draw.circle(minimap_surface, self._color_for_unit(unit, (255, 50, 50)), (int(mx), int(my)), 2)
 
         # Dessiner le cadre extérieur global de la minimap
         pygame.draw.rect(minimap_surface, (255, 255, 255), (0, 0, self.minimap_size, self.minimap_size), 2)
@@ -502,14 +522,33 @@ class PyScreen(Affichage):
         self.screen.blit(label, (minimap_x, minimap_y - 20))
 
     def _draw_army_stats(self, army1: Army, army2: Army):
-        # [Logique inchangée pour les statistiques]
         panel_x = 10
         panel_y = 10
-        panel_width = 300
+        panel_width = 360
         line_height = 25
         current_y = panel_y
 
-        panel_surface = pygame.Surface((panel_width, 400))
+        all_units = army1.living_units() + army2.living_units()
+        groups = []
+        seen_owners = set()
+        local_owner = None
+        if army1.living_units():
+            local_owner = getattr(army1.living_units()[0], "network_owner_id", None)
+
+        for unit in all_units:
+            owner_id = getattr(unit, "network_owner_id", None) or "army"
+            if owner_id in seen_owners:
+                continue
+            units = [
+                other for other in all_units
+                if (getattr(other, "network_owner_id", None) or "army") == owner_id
+            ]
+            if units:
+                seen_owners.add(owner_id)
+                groups.append((owner_id, units))
+
+        panel_height = min(self.HEIGHT - 20, max(400, 80 + len(groups) * 95))
+        panel_surface = pygame.Surface((panel_width, panel_height))
         panel_surface.set_alpha(200)
         panel_surface.fill((20, 20, 20))
         self.screen.blit(panel_surface, (panel_x, panel_y))
@@ -518,79 +557,56 @@ class PyScreen(Affichage):
         self.screen.blit(title, (panel_x + 5, current_y))
         current_y += line_height + 5
 
-        if self.show_army1_details:
-            army1_units = army1.living_units()
-            army1_count = len(army1_units)
-            header1 = self.font.render(f"Army 1 ({type(army1.general).__name__}): {army1_count} units", True, (50, 100, 255))
-            self.screen.blit(header1, (panel_x + 5, current_y))
+        for index, (owner_id, units) in enumerate(groups, start=1):
+            color = self._color_for_unit(units[0], (255, 255, 255))
+            general_name = ""
+            if owner_id == local_owner and army1.general:
+                general_name = f" ({type(army1.general).__name__})"
+
+            header = self.font.render(f"Army {index}{general_name}: {len(units)} units", True, color)
+            self.screen.blit(header, (panel_x + 5, current_y))
             current_y += line_height
 
             if self.show_unit_counts:
-                knights = sum(1 for u in army1_units if isinstance(u, Knight))
-                pikemen = sum(1 for u in army1_units if isinstance(u, Pikeman))
-                crossbowmen = sum(1 for u in army1_units if isinstance(u, Crossbowman))
-                if knights > 0:
-                    self.screen.blit(self.small_font.render(f"  Knights: {knights}", True, (200, 200, 200)), (panel_x + 5, current_y))
+                unit_counts = [
+                    ("Knights", sum(1 for u in units if isinstance(u, Knight))),
+                    ("Pikemen", sum(1 for u in units if isinstance(u, Pikeman))),
+                    ("Crossbowmen", sum(1 for u in units if isinstance(u, Crossbowman))),
+                    ("Monks", sum(1 for u in units if isinstance(u, Monk))),
+                    ("Elephants", sum(1 for u in units if isinstance(u, Elephant))),
+                    ("Castles", sum(1 for u in units if isinstance(u, Castle))),
+                ]
+                count_text = ", ".join(f"{label}: {count}" for label, count in unit_counts if count > 0)
+                if count_text:
+                    self.screen.blit(self.small_font.render(f"  {count_text}", True, (200, 200, 200)), (panel_x + 5, current_y))
                     current_y += line_height - 5
-                if pikemen > 0:
-                    self.screen.blit(self.small_font.render(f"  Pikemen: {pikemen}", True, (200, 200, 200)), (panel_x + 5, current_y))
-                    current_y += line_height - 5
-                if crossbowmen > 0:
-                    self.screen.blit(self.small_font.render(f"  Crossbowmen: {crossbowmen}", True, (200, 200, 200)), (panel_x + 5, current_y))
-                    current_y += line_height - 5
-            current_y += 5
-        else:
-            self.screen.blit(self.small_font.render("Army 1: (Press F2)", True, (150, 150, 150)), (panel_x + 5, current_y))
-            current_y += line_height
 
-        pygame.draw.line(self.screen, (100, 100, 100), (panel_x + 5, current_y), (panel_x + panel_width - 5, current_y))
-        current_y += line_height
+            current_y += 8
+            if index < len(groups):
+                pygame.draw.line(self.screen, (100, 100, 100), (panel_x + 5, current_y), (panel_x + panel_width - 5, current_y))
+                current_y += 12
 
-        if self.show_army2_details:
-            army2_units = army2.living_units()
-            army2_count = len(army2_units)
-            header2 = self.font.render(f"Army 2 ({type(army2.general).__name__}): {army2_count} units", True, (255, 50, 50))
-            self.screen.blit(header2, (panel_x + 5, current_y))
-            current_y += line_height
-
-            if self.show_unit_counts:
-                knights = sum(1 for u in army2_units if isinstance(u, Knight))
-                pikemen = sum(1 for u in army2_units if isinstance(u, Pikeman))
-                crossbowmen = sum(1 for u in army2_units if isinstance(u, Crossbowman))
-                if knights > 0:
-                    self.screen.blit(self.small_font.render(f"  Knights: {knights}", True, (200, 200, 200)), (panel_x + 5, current_y))
-                    current_y += line_height - 5
-                if pikemen > 0:
-                    self.screen.blit(self.small_font.render(f"  Pikemen: {pikemen}", True, (200, 200, 200)), (panel_x + 5, current_y))
-                    current_y += line_height - 5
-                if crossbowmen > 0:
-                    self.screen.blit(self.small_font.render(f"  Crossbowmen: {crossbowmen}", True, (200, 200, 200)), (panel_x + 5, current_y))
-                    current_y += line_height - 5
-        else:
-            self.screen.blit(self.small_font.render("Army 2: (Press F3)", True, (150, 150, 150)), (panel_x + 5, current_y))
-            current_y += line_height
-
-        # Aide textuelle
         current_y += 10
         help_text = [
-            "Contrôles (Souris):",
-            "Molette - Zoom / Défilement",
+            "Controles (Souris):",
+            "Molette - Zoom / Defilement",
             "Clic Gauche - Glisser la carte",
-            "Clic sur Minimap - Téléportation",
-            "Contrôles (Clavier):",
+            "Clic sur Minimap - Teleportation",
+            "Controles (Clavier):",
             "M - Afficher/Masquer Minimap",
-            "F1-F4 - Statistiques et Détails",
+            "F1-F4 - Statistiques et Details",
             "F11 - Sauvegarde Rapide",
             "F12 - Menu de Chargement",
             "ESPACE - Pause / Reprise",
             "Z / X - Vitesse +/-",
-            "C - Centrer la caméra",
+            "C - Centrer la camera",
             "ECHAP - Quitter le jeu"
         ]
         for line in help_text:
+            if current_y > panel_y + panel_height - 20:
+                break
             self.screen.blit(self.small_font.render(line, True, (150, 150, 150)), (panel_x + 5, current_y))
             current_y += line_height - 5
-
     def _quick_save(self):
         import os
         from pathlib import Path

@@ -90,6 +90,14 @@ def main():
         "--remote_port", type=int, default=6000,
         help="Target port on the remote machine"
     )
+    run_parser.add_argument(
+        "--ticks", "-t", type=int, default=None,
+        help="Maximum ticks to run the online battle (omit to run until end)"
+    )
+    run_parser.add_argument(
+        "--spawn_slot", type=int, default=None,
+        help="Deployment slot for online mode: 0=host side, 1/2/...=separate joiner lanes"
+    )
 
     # ==================== TestOnline ====================
     run_parser = subparsers.add_parser("testOnline", help="Test online")
@@ -112,8 +120,10 @@ def main():
             py_port=args.py_port,
             lan_port=args.lan_port,
             remote_port=args.remote_port,
-            is_first=is_first
+            is_first=is_first,
+            spawn_slot=args.spawn_slot
         )
+        gameMode.max_tick = args.ticks
 
         if args.join : gameMode.know_ip.add(args.join)
 

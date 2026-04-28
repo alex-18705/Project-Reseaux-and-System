@@ -10,7 +10,7 @@ from backend.Utils.class_by_name import general_from_name
 from backend.Class.Units.Knight import Knight
 from backend.Class.Units.Pikeman import Pikeman
 from backend.Class.Units.Crossbowman import Crossbowman
-from backend.Utils.convert_json import json_to_army, army_to_json, army_to_dict
+from backend.Utils.convert_json import json_to_army, army_to_json, army_to_dict, map_to_dict, json_to_map
 from network.network_api import NetworkBridge
 
 
@@ -19,7 +19,7 @@ from network.network_api import NetworkBridge
 
 class Online(GameMode):
 
-    def __init__(self, py_port=5000, lan_port=6000, remote_port=6000, is_first=True):
+    def __init__(self, py_port=5000, lan_port=6000, remote_port=6000, is_first=True, spawn_slot=None):
         super().__init__()
         self.max_tick = None
         self.tick = 0
@@ -34,7 +34,62 @@ class Online(GameMode):
         self.lan_port = lan_port
         self.remote_port = remote_port
         self.is_first = is_first # Host is Blue (P1), Joiner is Red (P2)
+        if spawn_slot is None:
+            spawn_slot = 0 if is_first else max(1, lan_port - remote_port)
+        self.spawn_slot = spawn_slot
         self.has_started = False
+        self._army_base_positions = {}
+        self._army_mirrored_for_width = None
+        self._last_known_remote_armies = 0
+        self._last_logged_map_signature = None
+
+    def _map_signature(self):
+        if self.map is None:
+            return "none"
+        width = getattr(self.map, "width", "?")
+        height = getattr(self.map, "height", "?")
+        obstacles = len(getattr(self.map, "obstacles", []))
+        return f"{width}x{height}, obstacles={obstacles}"
+
+    def _log_map_if_changed(self):
+        signature = self._map_signature()
+        if signature != self._last_logged_map_signature:
+            print(f"[Online] Map courante : {signature}")
+            self._last_logged_map_signature = signature
+
+    def _mark_army_owner(self, army, army_id):
+        if army is None:
+            return
+        for unit in army.units:
+            unit.network_owner_id = army_id
+
+    def _remember_base_positions(self):
+        if self.my_army is None:
+            return
+        self._army_base_positions = {
+            unit.id: unit.position
+            for unit in self.my_army.units
+            if unit.position is not None
+        }
+
+    def _deploy_my_army_for_current_map(self):
+        if self.my_army is None or self.map is None:
+            return
+        width = getattr(self.map, "width", None)
+        height = getattr(self.map, "height", None)
+        if width is None or height is None or self._army_mirrored_for_width == width:
+            return
+        print(f"[Online] Deploying army slot {self.spawn_slot} on map {width}x{height}...")
+        y_offset = 0 if self.spawn_slot == 0 else self.spawn_slot * 20
+        for unit in self.my_army.units:
+            base_pos = self._army_base_positions.get(unit.id, unit.position)
+            if base_pos:
+                x, y = base_pos
+                if self.spawn_slot != 0:
+                    x = (width - 1) - x
+                y = max(0, min(height - 1, y + y_offset))
+                unit.position = (x, y)
+        self._army_mirrored_for_width = width
 
     def flat(self):
         new = Army()
@@ -45,7 +100,7 @@ class Online(GameMode):
         return new
 
     def continue_condition(self):
-        return True
+        return self.max_tick is None or self.tick < self.max_tick
 
     def end(self):
         # Fermeture de l'affichage
@@ -59,33 +114,50 @@ class Online(GameMode):
 
     def message_receive(self):
         """
-        Récupère les mises à jour du pont réseau et met à jour l'état des autres armées.
-        Découvre également automatiquement les nouveaux pairs.
+        Recuperer les messages reseau, synchroniser la map envoyee par le host,
+        puis mettre a jour les armees des autres joueurs.
         """
         messages = self.network_bridge.get_updates()
         updated = False
         for msg in messages:
-            # Découverte automatique : ajouter l'expéditeur à know_ip s'il n'y est pas déjà
             sender_ip = msg.get("_sender_ip")
             if sender_ip and sender_ip not in self.know_ip:
-                print(f"[Online] Nouveau pair découvert : {sender_ip}")
+                print(f"[Online] Nouveau pair decouvert : {sender_ip}")
                 self.know_ip.add(sender_ip)
 
-            # Le payload envoyé est un dictionnaire {id: army_data}
             payload = msg.get("payload", {})
-            if isinstance(payload, dict):
-                for army_id, army_data in payload.items():
-                    if army_id != self.my_id:
-                        # Utiliser le chargement basé sur le dictionnaire
-                        try:
-                            self.othersArmy[army_id] = json_to_army(army_data)
-                        except Exception as e:
-                            print(f"[Online] Erreur lors du chargement de l'armée de {army_id} : {e}")
-                        updated = True
-                    else :
-                        self.my_army = json_to_army(army_data)
-        return updated
+            if not isinstance(payload, dict):
+                continue
 
+            if "map" in payload and payload["map"]:
+                try:
+                    self.map = json_to_map(payload["map"])
+                    self._deploy_my_army_for_current_map()
+                    self._log_map_if_changed()
+                except Exception as e:
+                    print(f"[Online] Erreur lors du chargement de la map : {e}")
+
+            armies_payload = payload.get("armies", payload)
+            if not isinstance(armies_payload, dict):
+                continue
+
+            for army_id, army_data in armies_payload.items():
+                if army_id != self.my_id:
+                    try:
+                        army = json_to_army(army_data)
+                        self._mark_army_owner(army, army_id)
+                        self.othersArmy[army_id] = army
+                    except Exception as e:
+                        print(f"[Online] Erreur lors du chargement de l'armee de {army_id} : {e}")
+                    updated = True
+                else:
+                    self.my_army = json_to_army(army_data)
+                    self._mark_army_owner(self.my_army, self.my_id)
+        known_remote_armies = len(self.othersArmy)
+        if known_remote_armies != self._last_known_remote_armies:
+            print(f"[Online] Armees distantes connues : {known_remote_armies}")
+            self._last_known_remote_armies = known_remote_armies
+        return updated
     def run(self):
         """
         Étape principale de la simulation pour le mode Online :
@@ -118,9 +190,10 @@ class Online(GameMode):
         self._broadcast_state()
 
     def _broadcast_state(self):
+        if not self.know_ip:
+            return
         payload = self.create_payload()
-        for ip in self.know_ip:
-            self.network_bridge.send_message("SYNC_UPDATE", ip, payload)
+        self.network_bridge.send_message("SYNC_UPDATE", next(iter(self.know_ip)), payload)
 
     def update_dead(self, all_enemies):
         for army in self.othersArmy.values():
@@ -135,13 +208,9 @@ class Online(GameMode):
         return self.flat()
 
     def launch(self):
-        # If we are the joiner, mirror our units to the right immediately
-        if not self.is_first and self.my_army:
-            print("[Online] Mirroring army to the right side...")
-            for unit in self.my_army.units:
-                if unit.position:
-                    new_x = (self.map.width - 1) - unit.position[0]
-                    unit.position = (new_x, unit.position[1])
+        self._remember_base_positions()
+        self._deploy_my_army_for_current_map()
+        self._log_map_if_changed()
 
         self.affichage.initialiser()
         remote_ip = list(self.know_ip)[0] if self.know_ip else None
@@ -161,11 +230,15 @@ class Online(GameMode):
                 self.othersArmy[k] = json_to_army(army[k])
 
     def create_payload(self):
-        # Only send OUR army state to avoid redundant data
-        result = {}
-        for army_id, army in self.othersArmy.items():
-             result[army_id] = army_to_dict(army)
-        result[self.my_id] = army_to_dict(self.my_army)
+        armies = {
+            self.my_id: army_to_dict(self.my_army)
+        }
+        if self.is_first:
+            for army_id, army in self.othersArmy.items():
+                armies[army_id] = army_to_dict(army)
+        result = {"armies": armies}
+        if self.is_first and self.map is not None and (self.tick < 20 or self.tick % 50 == 0):
+            result["map"] = map_to_dict(self.map)
         return result
 
 
@@ -173,6 +246,7 @@ class Online(GameMode):
     def army1(self, value):
         value.gameMode = self
         self.my_army = value
+        self._mark_army_owner(self.my_army, self.my_id)
 
     @army2.setter
     def army2(self, value):
