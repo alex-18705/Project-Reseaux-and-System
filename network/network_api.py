@@ -55,16 +55,16 @@ class NetworkBridge:
             import os
             
             # Paths relative to project root or current dir
-            proxy_path = os.path.join("network", "proxy_udp.exe")
+            proxy_path = os.path.join("network", "proxy_udp_real_ip.exe")
             if not os.path.exists(proxy_path):
                 # Try local dir if not in network/
-                proxy_path = "proxy_udp.exe"
+                proxy_path = "proxy_udp_real_ip.exe"
 
             args = [proxy_path]
             if remote_ip:
                 args.append(remote_ip)
             else:
-                args.append("server")
+                args.append("peer")
             
             # Use provided ports
             args.append(str(self.port))      # py_port
