@@ -10,6 +10,7 @@ from backend.Utils.class_by_name import general_from_name
 from backend.Class.Units.Knight import Knight
 from backend.Class.Units.Pikeman import Pikeman
 from backend.Class.Units.Crossbowman import Crossbowman
+from backend.Utils.network_ownership import initialize_ownership, get_ownership_manager
 from backend.Utils.convert_json import json_to_army, army_to_json, army_to_dict
 from network.network_api import NetworkBridge
 
@@ -35,6 +36,10 @@ class Online(GameMode):
         self.remote_port = remote_port
         self.is_first = is_first # Host is Blue (P1), Joiner is Red (P2)
         self.has_started = False
+        self.current_sender_id = None
+        
+        # Initialize ownership system
+        initialize_ownership(self.my_id)
 
     def flat(self):
         new = Army()
@@ -64,6 +69,8 @@ class Online(GameMode):
         """
         messages = self.network_bridge.get_updates()
         updated = False
+        ownership = get_ownership_manager()
+
         for msg in messages:
             # Découverte automatique : ajouter l'expéditeur à know_ip s'il n'y est pas déjà
             sender_ip = msg.get("_sender_ip")
@@ -76,9 +83,18 @@ class Online(GameMode):
             if isinstance(payload, dict):
                 for army_id, army_data in payload.items():
                     if army_id != self.my_id:
+                        self.current_sender_id = army_id
+                        ownership.register_peer(army_id)
+                        
                         # Utiliser le chargement basé sur le dictionnaire
                         try:
-                            self.othersArmy[army_id] = json_to_army(army_data)
+                            remote_army = json_to_army(army_data)
+                            self.othersArmy[army_id] = remote_army
+                            
+                            # Register ownership of remote units
+                            for unit in remote_army.units:
+                                ownership.assign_ownership(unit.id, army_id)
+                                
                         except Exception as e:
                             print(f"[Online] Erreur lors du chargement de l'armée de {army_id} : {e}")
                         updated = True
@@ -107,8 +123,14 @@ class Online(GameMode):
             print("Joueur rejoint ! Début de la bataille.")
             self.has_started = True
 
+        # Register our own units' ownership if not done
+        ownership = get_ownership_manager()
+        for unit in self.my_army.units:
+            ownership.assign_ownership(unit.id, self.my_id)
+
         # Exécuter la logique de combat pour NOS unités
         all_enemies = self.flat()
+        self.current_sender_id = self.my_id # We are the executor for our own units
         self.my_army.fight(self.map, otherArmy=all_enemies)
         self.update_dead(all_enemies)
         

@@ -42,6 +42,7 @@ from backend.Class.Obstacles.Rocher import Rocher
 
 def unit_to_dict(unit):
     return {
+        "id": unit.id,
         "type": unit.__class__.__name__,
         "hp": unit.hp,
         "position": unit.position,
@@ -54,6 +55,7 @@ def army_to_dict(army):
     if army is None:
         return None
     return {
+        "owner": army.owner if hasattr(army, "owner") else None,
         "general" : army.general.__class__.__name__ if army.general else None,
         "units": [unit_to_dict(u) for u in army.units],
     }
@@ -88,9 +90,15 @@ def json_to_army(data_army):
         army_data = json.loads(data_army)
     else:
         army_data = data_army
+    
+    owner = army_data.get("owner")
     army = Army()
+    if hasattr(army, "owner"):
+        army.owner = owner
+
     if army_data.get("general"):
         army.general = GENERAL_REGISTRY[army_data["general"].lower()]()
+    
     for d in army_data["units"]:
         cls = globals().get(d["type"])
         if cls is None:
@@ -98,6 +106,10 @@ def json_to_army(data_army):
         unit = cls(
             position=tuple(d["position"] if d["position"] else None),
         )
+        # Restore the ID from network data
+        if "id" in d:
+            unit._Unit__id = d["id"]
+            
         unit.hp = d["hp"]
         unit.cooldown = d["cooldown"]
         unit.last_attacker = d["last_attacker"]

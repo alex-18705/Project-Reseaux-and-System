@@ -156,6 +156,8 @@ class Army:
 
 
     def execOrder(self, orders: Action, otherArmy: "Army"):
+        from backend.Utils.network_ownership import get_ownership_manager, OwnershipStatus
+
         for unit in self.units:
             if unit.cooldown > 0: unit.cooldown -= 1
         # Cette fonction applique les dégâts avec les bonus sur l'armée adverse et
@@ -166,9 +168,27 @@ class Army:
         - déplacement : mise à jour de la position
         """
 
-        for action in orders:
+        ownership = None
+        try:
+            ownership = get_ownership_manager()
+        except RuntimeError:
+            # Ownership not initialized (likely single player/Battle mode), skip check
+            pass
 
+        for action in orders:
             unit : Unit = action.unit
+            
+            # VALIDATION CHECK
+            if ownership and self.gameMode and hasattr(self.gameMode, "current_sender_id"):
+                status = ownership.validate_action(
+                    {"unit_id": unit.id}, 
+                    self.gameMode.current_sender_id
+                )
+                if status != OwnershipStatus.AUTHORIZED:
+                    if getattr(self.gameMode, "verbose", False):
+                        print(f"[Ownership] Action REJECTED for Unit {unit.id}: Peer {self.gameMode.current_sender_id} is not the owner.")
+                    continue
+
             target: Unit = action.target
             # ATTAQUE
             if action.kind == "attack":
