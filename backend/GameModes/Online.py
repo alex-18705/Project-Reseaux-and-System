@@ -19,7 +19,7 @@ from network.network_api import NetworkBridge
 
 class Online(GameMode):
 
-    def __init__(self, py_port=5000, lan_port=6000, remote_port=6000, is_host=True):
+    def __init__(self, py_port=5000, lan_port=6000, remote_port=6000, is_first=True):
         super().__init__()
         self.max_tick = None
         self.tick = 0
@@ -33,7 +33,7 @@ class Online(GameMode):
         self.my_id = str(uuid.uuid4())
         self.lan_port = lan_port
         self.remote_port = remote_port
-        self.is_host = is_host # Host is Blue (P1), Joiner is Red (P2)
+        self.is_first = is_first # Host is Blue (P1), Joiner is Red (P2)
         self.has_started = False
 
     def flat(self):
@@ -110,6 +110,7 @@ class Online(GameMode):
         # Exécuter la logique de combat pour NOS unités
         all_enemies = self.flat()
         self.my_army.fight(self.map, otherArmy=all_enemies)
+        print(len(all_enemies.living_units()))
         self.update_dead(all_enemies)
         
         # Incrémenter le tick
@@ -131,7 +132,7 @@ class Online(GameMode):
     @property
     def army1(self):
         # Army 1 is ALWAYS the Left (Blue) side
-        if self.is_host:
+        if self.is_first:
             return self.my_army
         else:
             return self.othersArmy.get(list(self.othersArmy.keys())[0], Army()) if self.othersArmy else Army()
@@ -139,14 +140,14 @@ class Online(GameMode):
     @property
     def army2(self):
         # Army 2 is ALWAYS the Right (Red) side
-        if not self.is_host:
+        if not self.is_first:
             return self.my_army
         else:
             return self.othersArmy.get(list(self.othersArmy.keys())[0], Army()) if self.othersArmy else Army()
 
     def launch(self):
         # If we are the joiner, mirror our units to the right immediately
-        if not self.is_host and self.my_army:
+        if not self.is_first and self.my_army:
             print("[Online] Mirroring army to the right side...")
             for unit in self.my_army.units:
                 if unit.position:
