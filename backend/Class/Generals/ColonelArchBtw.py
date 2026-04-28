@@ -89,7 +89,7 @@ class ColonelArchBtw(General) :
                 else:
                     if unit.cooldown > 40 and unit.last_attacked_id is not None:
 
-                        if unit.last_attacked_id is "conversion":
+                        if unit.last_attacked_id == "conversion":
                             unit.last_attacked_id = max(self.army.living_units(),
                                                      key=lambda allie: self.__distance_sq(unit, allie)).id
                         target = otherArmy.get_unit_by_id(unit.last_attacked_id)
