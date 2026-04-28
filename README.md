@@ -84,7 +84,13 @@ How to Test (Local 1v1)
 .\.venv\Scripts\python.exe main.py online --join 127.0.0.1 --general MajorDaft --army_file army/two.army --map_file map/superflat.map --pygame --py_port 5001 --lan_port 6001 --remote_port 6000
 ```
 TEST WITH IP
-1st player: cmd ipconfig to find ip
+
+### 1st player: cmd ipconfig to find ip
+```powershell
 python main.py online --general GeneralClever --army_file army/cube2.army --map_file map/superflat.map --pygame
-2nd player:
+```
+
+### 2nd player:
+```powershell
 python main.py online --general GeneralClever --army_file army/cube2.army --map_file map/superflat.map --pygame --join [ip of 1st player]
+```
