@@ -51,8 +51,10 @@ def unit_to_dict(unit):
     }
 
 def army_to_dict(army):
+    if army is None:
+        return None
     return {
-        "general" : army.general.__class__.__name__,
+        "general" : army.general.__class__.__name__ if army.general else None,
         "units": [unit_to_dict(u) for u in army.units],
     }
 
@@ -80,12 +82,15 @@ def army_to_json(army):
     return data
 
 def json_to_army(data_army):
+    if data_army is None:
+        return None
     if isinstance(data_army, str):
         army_data = json.loads(data_army)
     else:
         army_data = data_army
     army = Army()
-    army.general = GENERAL_REGISTRY[army_data["general"].lower()]()
+    if army_data.get("general"):
+        army.general = GENERAL_REGISTRY[army_data["general"].lower()]()
     for d in army_data["units"]:
         cls = globals().get(d["type"])
         if cls is None:

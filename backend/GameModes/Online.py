@@ -125,9 +125,7 @@ class Online(GameMode):
 
     def update_dead(self, all_enemies):
         for army in self.othersArmy.values():
-            for u in range(army.units):
-                if army.units[u] not in all_enemies.units:
-                    del army.units[u]
+            army.units = [u for u in army.units if u in all_enemies.units]
 
     @property
     def army1(self):
@@ -165,8 +163,10 @@ class Online(GameMode):
 
     def create_payload(self):
         # Only send OUR army state to avoid redundant data
-        result= self.othersArmy.copy()
-        result[self.my_id] = self.my_army
+        result = {}
+        for army_id, army in self.othersArmy.items():
+             result[army_id] = army_to_dict(army)
+        result[self.my_id] = army_to_dict(self.my_army)
         return result
 
 
