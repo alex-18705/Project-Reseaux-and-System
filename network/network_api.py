@@ -45,6 +45,14 @@ class NetworkBridge:
         # (seuls les types dans _TYPES_SEQUENCES sont filtrés)
         self._seq_in = {}
 
+    def _sender_key_from_message(self, msg):
+        payload = msg.get("payload", {})
+        if isinstance(payload, dict):
+            armies = payload.get("armies", payload)
+            if isinstance(armies, dict) and armies:
+                return next(iter(armies.keys()))
+        return msg.get("dep") or msg.get("_sender_ip") or "unknown"
+
     # ---- Connexion ----
     def connect(self, remote_ip=None, lan_port=6000, remote_port=6000):
         """Ouvre le socket UDP local, démarre le proxy C et le thread de réception."""
@@ -126,17 +134,19 @@ class NetworkBridge:
 
                 msg_type = msg.get("type")
                 seq      = msg.get("seq", -1)
+                sender_key = self._sender_key_from_message(msg)
 
                 # ---- Filtre de réordonnancement ----
                 # Pour les types sensibles à l'ordre (ex: SYNC_UPDATE),
                 # on ignore tout paquet dont le seq est inférieur ou égal
                 # au dernier seq reçu : c'est un paquet retardé.
                 if msg_type in _TYPES_SEQUENCES and seq != -1:
-                    dernier = self._seq_in.get(msg_type, -1)
+                    seq_key = (msg_type, sender_key)
+                    dernier = self._seq_in.get(seq_key, -1)
                     if seq <= dernier:
                         # Paquet hors ordre → ignorer silencieusement
                         continue
-                    self._seq_in[msg_type] = seq
+                    self._seq_in[seq_key] = seq
 
                 self.incoming_queue.put(msg)
 
@@ -202,7 +212,7 @@ class NetworkBridge:
             taille = len(donnees.encode('utf-8'))
             if taille > 1400:
                 print(f"[NetworkBridge] ATTENTION : datagramme volumineux "
-                      f"({taille} octets, MTU ≈ 1500). Risque de fragmentation !")
+                      f"({taille} octets, MTU ~ 1500). Risque de fragmentation !")
             return True
         except Exception as e:
             print(f"[NetworkBridge] Erreur lors de l'envoi ({msg_type}) : {e}")
