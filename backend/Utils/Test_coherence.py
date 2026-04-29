@@ -15,7 +15,7 @@ class Test_coherence:
         report=[]
         if self.MY_ARMY and gamemode.my_army :
             report.extend(self.compare_army(self.MY_ARMY, gamemode.my_army,map, gamemode.flat()))
-        for k in gamemode.other_army.keys():
+        for k in gamemode.othersArmy.keys():
             if self.OTHER_ARMY.get(k,None) and gamemode.othersArmy.get(k,None) :
                 other_list = gamemode.othersArmy.copy()
                 other_list.remove(k)
@@ -27,13 +27,13 @@ class Test_coherence:
                     all_units.extend(other_list[army_id].units)
                 otherArmy.units = all_units
 
-                report.extend(self.compare_army(self.OTHER_ARMY[k], gamemode.other_army[k],gamemode.map, otherArmy))
+                report.extend(self.compare_army(self.OTHER_ARMY[k], gamemode.othersArmy[k],gamemode.map, otherArmy))
 
         self.print_report(report)
 
-    def set_armies(self,my_army, other_army :dict):
+    def set_armies(self,my_army, othersArmy :dict):
         self.MY_ARMY = my_army.deepcopy()
-        self.OTHER_ARMY = other_army.deepcopy()
+        self.OTHER_ARMY = othersArmy.deepcopy()
 
     @staticmethod
     def compare_army(old_army, new_army,map, otherArmy):
