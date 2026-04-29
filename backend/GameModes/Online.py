@@ -389,22 +389,29 @@ class Online(GameMode):
                 self.othersArmy[k] = json_to_army(army[k])
 
     def create_payload(self):
-        armies = {
+        army = {
+            "armies": {
             self.my_id: army_to_dict(self.my_army)
+        },
+            "peer_ips": self.peer_ips
         }
+
+
+        result = []
         # In multi-peer mode, everyone should ideally know about everyone.
         # If we only send OUR army, a new peer joining P1 (host) might not see P2 if P2 doesn't know P3 yet.
         # So we broadcast all known armies.
         for army_id, army in self.othersArmy.items():
-            armies[army_id] = army_to_dict(army)
-
-        result = {
-            "armies": armies,
+            result.append({
+            "armies": {army_id: army_to_dict(army)},
             "peer_ips": self.peer_ips
-        }
+        })
+
         # Only host (is_first) decides the map to avoid conflicts
         if self.is_first and self.map is not None and (self.tick < 20 or self.tick % 50 == 0):
-            result["map"] = map_to_dict(self.map)
+            army["map"] = map_to_dict(self.map)
+
+        result.append(army)
         return result
 
 
