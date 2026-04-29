@@ -25,16 +25,20 @@ class Test_coherence:
     @staticmethod
     def compare_army(old_army, new_army):
         report =[]
-
-        #collision
-
-
-        #cooldown
-
-
-        #degat
         for unit in new_army.units:
-            pass
+            #collision
+
+
+
+            old_unit = old_army.get_unit_by_id(unit.id)
+            if old_unit :
+                #cooldown
+                if unit.hp > old_unit.hp:
+                    report.append({"type":"hp", "unit" : unit})
+                #degat
+                if unit.old_unit.cooldown != 0 and unit.cooldown > old_unit.cooldown:
+                    report.append({"type":"cooldown", "unit" : unit})
+
 
 
 
