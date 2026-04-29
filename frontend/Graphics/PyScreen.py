@@ -92,8 +92,7 @@ class PyScreen(Affichage):
         # Variable pour centrer la caméra initialement
         self.camera_centered = False
         self.current_map_bounds = (0, 0, 0, 0) # (x_max, x_min, y_max, y_min)
-        self.player_colors = {}
-        self.player_labels = {}
+        self.player_styles = {}
         self.color_palette = [
             (50, 100, 255),
             (255, 50, 50),
@@ -105,26 +104,33 @@ class PyScreen(Affichage):
             (230, 230, 80),
         ]
 
-    def _color_for_unit(self, unit, fallback_color):
-        owner_id = getattr(unit, "network_owner_id", None)
-        if owner_id is None:
-            return fallback_color
-        if owner_id not in self.player_colors:
-            index = len(self.player_colors) % len(self.color_palette)
-            self.player_colors[owner_id] = self.color_palette[index]
-        return self.player_colors[owner_id]
-
-    def _label_for_owner(self, owner_id, fallback_index):
+    def _style_for_owner(self, owner_id, fallback_index=None):
         if owner_id == "army":
-            return f"Army {fallback_index}"
-        if owner_id not in self.player_labels:
-            index = len(self.player_labels)
+            return {
+                "label": f"Army {fallback_index or 1}",
+                "color": self.color_palette[((fallback_index or 1) - 1) % len(self.color_palette)]
+            }
+
+        if owner_id not in self.player_styles:
+            index = len(self.player_styles)
             if index < 26:
                 suffix = chr(ord("A") + index)
             else:
                 suffix = str(index + 1)
-            self.player_labels[owner_id] = f"player_{suffix}"
-        return self.player_labels[owner_id]
+            self.player_styles[owner_id] = {
+                "label": f"player_{suffix}",
+                "color": self.color_palette[index % len(self.color_palette)]
+            }
+        return self.player_styles[owner_id]
+
+    def _color_for_unit(self, unit, fallback_color):
+        owner_id = getattr(unit, "network_owner_id", None)
+        if owner_id is None:
+            return fallback_color
+        return self._style_for_owner(owner_id)["color"]
+
+    def _label_for_owner(self, owner_id, fallback_index):
+        return self._style_for_owner(owner_id, fallback_index)["label"]
 
     def _get_interpolated_position(self, unit):
         """Obtenir la position interpolée pour une animation fluide."""
@@ -516,13 +522,17 @@ class PyScreen(Affichage):
         for unit in army1.living_units():
             if unit.position is not None:
                 mx, my = get_mini_iso(*unit.position)
-                pygame.draw.circle(minimap_surface, self._color_for_unit(unit, (50, 100, 255)), (int(mx), int(my)), 2)
+                mini_pos = (int(mx), int(my))
+                pygame.draw.circle(minimap_surface, (10, 10, 10), mini_pos, 4)
+                pygame.draw.circle(minimap_surface, self._color_for_unit(unit, (50, 100, 255)), mini_pos, 3)
 
         # Dessiner les unités de l'armée 2
         for unit in army2.living_units():
             if unit.position is not None:
                 mx, my = get_mini_iso(*unit.position)
-                pygame.draw.circle(minimap_surface, self._color_for_unit(unit, (255, 50, 50)), (int(mx), int(my)), 2)
+                mini_pos = (int(mx), int(my))
+                pygame.draw.circle(minimap_surface, (10, 10, 10), mini_pos, 4)
+                pygame.draw.circle(minimap_surface, self._color_for_unit(unit, (255, 50, 50)), mini_pos, 3)
 
         # Dessiner le cadre extérieur global de la minimap
         pygame.draw.rect(minimap_surface, (255, 255, 255), (0, 0, self.minimap_size, self.minimap_size), 2)
