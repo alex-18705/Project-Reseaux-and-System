@@ -2,6 +2,7 @@ import socket
 import json
 import threading
 import queue
+import zlib
 
 # ============================================================
 #   NetworkBridge — Pont réseau Python ↔ Proxy C (UDP)
@@ -67,12 +68,17 @@ class NetworkBridge:
             return "127.0.0.1"
 
     def _sender_key_from_message(self, msg):
+        if "sender_id" in msg:
+            return msg["sender_id"]
         payload = msg.get("payload", {})
         if isinstance(payload, dict):
+            if "peer_id" in payload:
+                return payload["peer_id"]
             armies = payload.get("armies", payload)
             if isinstance(armies, dict) and armies:
                 return next(iter(armies.keys()))
         return msg.get("dep") or msg.get("_sender_ip") or "unknown"
+
 
     # ---- Connexion ----
     def connect(self, remote_ip=None, lan_port=6000, remote_port=6000):
@@ -120,9 +126,16 @@ class NetworkBridge:
         time.sleep(1.0)
 
         self.sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        try:
+            self.sock.setsockopt(socket.SOL_SOCKET, socket.SO_SNDBUF, 65535)
+            self.sock.setsockopt(socket.SOL_SOCKET, socket.SO_RCVBUF, 65535)
+        except Exception as e:
+            print(f"[NetworkBridge] Warning: Could not set socket buffer size: {e}")
+        
         # Timeout de 1 s : le thread peut vérifier is_connected périodiquement
         self.sock.settimeout(1.0)
         self.server_addr = (self.host, self.port)
+
         self.is_connected = True
 
         # Premier paquet pour que le Proxy C enregistre notre port éphémère
@@ -151,7 +164,16 @@ class NetworkBridge:
                 if not data:
                     continue
 
-                ligne = data.decode('utf-8').strip()
+                try:
+                    data = zlib.decompress(data)
+                except zlib.error:
+                    pass # Fallback to uncompressed
+                    
+                try:
+                    ligne = data.decode('utf-8').strip()
+                except UnicodeDecodeError:
+                    continue
+                    
                 _recv_count += 1
                 if _recv_count <= 5 or _recv_count % 50 == 0:
                     print(f"[NetworkBridge] RAW recv #{_recv_count}: {len(data)} bytes from {addr}")
@@ -263,15 +285,18 @@ class NetworkBridge:
             "size": len(payload_dict),
             "dest": destination,
             "dep":  self._my_ip,   # our real IP so the remote side can add us to know_ip
+            "sender_id": getattr(self, "my_id", "unknown"),
             "seq":  self._seq_out,
             "type": msg_type,
             "payload": payload_dict
         }
 
+
         try:
             # JSON compact : pas d'espaces → taille minimale
-            donnees = json.dumps(message, separators=(',', ':')) + '\n'
-            self.sock.sendto(donnees.encode('utf-8'), self.server_addr)
+            donnees_str = json.dumps(message, separators=(',', ':'))
+            donnees = zlib.compress(donnees_str.encode('utf-8'))
+            self.sock.sendto(donnees, self.server_addr)
 
             # Avertir si le datagramme dépasse le MTU standard (1500 octets)
             taille = len(donnees.encode('utf-8'))

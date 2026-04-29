@@ -33,6 +33,8 @@ class Online(GameMode):
         self.network_bridge = NetworkBridge(port=py_port)
         self.know_ip= set()
         self.my_id = str(uuid.uuid4())
+        self.network_bridge.my_id = self.my_id
+
         self.lan_port = lan_port
         self.remote_port = remote_port
         self.is_first = is_first # Host is Blue (P1), Joiner is Red (P2)
@@ -129,13 +131,20 @@ class Online(GameMode):
         current_owner = ownership.get_owner(unit_id)
         if current_owner and current_owner != self.my_id:
             ownership.request_ownership(unit_id, self.my_id)
-            # Find the IP of the current_owner (we broadcast if we don't know it specifically)
-            # For simplicity, we broadcast to all known IPs, the owner will process it.
-            for ip in self.know_ip:
+            ip = self.peer_ips.get(current_owner)
+            if ip:
                 self.network_bridge.send_message("OWNERSHIP_REQUEST", ip, {
                     "unit_id": unit_id,
                     "requester_id": self.my_id
                 }, peer_id=current_owner)
+            else:
+                # Broadcast unencrypted as fallback
+                for fallback_ip in self.know_ip:
+                    self.network_bridge.send_message("OWNERSHIP_REQUEST", fallback_ip, {
+                        "unit_id": unit_id,
+                        "requester_id": self.my_id
+                    })
+
 
     def message_receive(self):
         """
@@ -153,10 +162,13 @@ class Online(GameMode):
             payload = msg.get("payload", {})
             
             if sender_ip and sender_ip not in self.know_ip:
-                print(f"[Online] Nouveau pair decouvert : {sender_ip}")
                 self.know_ip.add(sender_ip)
-                # Initiate handshake
-                if security:
+                
+            sender_id = msg.get("sender_id")
+            if sender_id and sender_id != self.my_id and sender_id != "unknown":
+                if security and sender_id not in security.peer_public_keys:
+                    print(f"[Online] Nouveau pair decouvert (ID) : {sender_id}")
+                    # Initiate handshake
                     self.network_bridge.send_message("SECURE_HELLO", sender_ip, {
                         "public_key": security.get_my_public_key_pem(),
                         "peer_id": self.my_id
@@ -302,24 +314,31 @@ class Online(GameMode):
         self._broadcast_state()
 
     def _broadcast_state(self):
+        payload_list = self.create_payload()
 
-        list_payload = self.create_payload()
-        if not self.know_ip:
-            # Envoie un paquet bidon pour enregistrer le port Python auprès du proxy C
-            for payload in list_payload:
+        for payload in payload_list:
+            if not self.know_ip:
+                # Envoie un paquet bidon pour enregistrer le port Python auprès du proxy C
                 self.network_bridge.send_message("SYNC_UPDATE", "0.0.0.0", payload)
-            return
-            
-        # Broadcast to all known IPs
-        for payload in list_payload:
-            for ip in self.know_ip:
+                return
+
+            # Broadcast to all known IPs
+            # In multi-peer mode, we must send to the IP associated with each peer ID
+            # using the correct session key.
+            other_peer_ips = []
+            for peer_id, ip in self.peer_ips.items():
+                if peer_id == self.my_id:
+                    continue
+                other_peer_ips.append(ip)
                 security = self.network_bridge.security_manager
-                if security and security.peer_session_keys:
-                    # Send encrypted message to each peer we have a session with
-                    for peer_id in security.peer_session_keys:
-                        self.network_bridge.send_message("SYNC_UPDATE", ip, payload, peer_id=peer_id)
+                if security and peer_id in security.peer_session_keys:
+                    self.network_bridge.send_message("SYNC_UPDATE", ip, payload, peer_id=peer_id)
                 else:
-                    # Fallback to unencrypted if no session key yet (handshake period)
+                    self.network_bridge.send_message("SYNC_UPDATE", ip, payload)
+
+            # Fallback for IPs in know_ip that are not in peer_ips yet (handshake phase)
+            for ip in self.know_ip:
+                if ip not in other_peer_ips:
                     self.network_bridge.send_message("SYNC_UPDATE", ip, payload)
 
     def update_dead(self, all_enemies):
@@ -360,21 +379,19 @@ class Online(GameMode):
                 self.othersArmy[k] = json_to_army(army[k])
 
     def create_payload(self):
-
-
-        result = []
+        armies = {
+            self.my_id: army_to_dict(self.my_army)
+        }
         # In multi-peer mode, everyone should ideally know about everyone.
         # If we only send OUR army, a new peer joining P1 (host) might not see P2 if P2 doesn't know P3 yet.
         # So we broadcast all known armies.
         for army_id, army in self.othersArmy.items():
-            result.append({army_id: army_to_dict(army)})
+            armies[army_id] = army_to_dict(army)
 
-
-        result1 = {"armies": { self.my_id: army_to_dict(self.my_army)}}
+        result = {"armies": armies}
         # Only host (is_first) decides the map to avoid conflicts
         if self.is_first and self.map is not None and (self.tick < 20 or self.tick % 50 == 0):
-            result1["map"] = map_to_dict(self.map)
-        result.append(result1)
+            result["map"] = map_to_dict(self.map)
         return result
 
 
