@@ -299,7 +299,7 @@ class NetworkBridge:
             self.sock.sendto(donnees, self.server_addr)
 
             # Avertir si le datagramme dépasse le MTU standard (1500 octets)
-            taille = len(donnees.encode('utf-8'))
+            taille = len(donnees)
             if taille > 1400:
                 print(f"[NetworkBridge] ATTENTION : datagramme volumineux "
                       f"({taille} octets, MTU ~ 1500). Risque de fragmentation !")

@@ -50,8 +50,11 @@ class SecurityManager:
         if peer_id not in self.peer_public_keys:
             return None
         
-        session_key = os.urandom(32) # AES-256
-        self.peer_session_keys[peer_id] = session_key
+        if peer_id in self.peer_session_keys:
+            session_key = self.peer_session_keys[peer_id]
+        else:
+            session_key = os.urandom(32) # AES-256
+            self.peer_session_keys[peer_id] = session_key
         
         encrypted_key = self.peer_public_keys[peer_id].encrypt(
             session_key,

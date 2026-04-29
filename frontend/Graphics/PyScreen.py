@@ -111,15 +111,17 @@ class PyScreen(Affichage):
                 "color": self.color_palette[((fallback_index or 1) - 1) % len(self.color_palette)]
             }
 
+        if getattr(self, "player_styles", None) is None:
+            self.player_styles = {}
+
         if owner_id not in self.player_styles:
-            index = len(self.player_styles)
-            if index < 26:
-                suffix = chr(ord("A") + index)
-            else:
-                suffix = str(index + 1)
+            import hashlib
+            hash_val = int(hashlib.md5(owner_id.encode('utf-8')).hexdigest(), 16)
+            index = hash_val % len(self.color_palette)
+            suffix = owner_id[:4]
             self.player_styles[owner_id] = {
                 "label": f"player_{suffix}",
-                "color": self.color_palette[index % len(self.color_palette)]
+                "color": self.color_palette[index]
             }
         return self.player_styles[owner_id]
 

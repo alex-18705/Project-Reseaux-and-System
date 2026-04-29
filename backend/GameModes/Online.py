@@ -32,6 +32,7 @@ class Online(GameMode):
         self.othersArmy = {} 
         self.network_bridge = NetworkBridge(port=py_port)
         self.know_ip= set()
+        self.pending_handshakes = {}
         self.my_id = str(uuid.uuid4())
         self.network_bridge.my_id = self.my_id
 
@@ -168,6 +169,19 @@ class Online(GameMode):
             if sender_id and sender_id != self.my_id and sender_id != "unknown":
                 if sender_ip:
                     self.peer_ips[sender_id] = sender_ip
+<<<<<<< HEAD
+                if security and sender_id not in security.peer_session_keys:
+                    last_hello = self.pending_handshakes.get(sender_id, 0)
+                    import time
+                    if time.time() - last_hello > 2.0:
+                        print(f"[Online] Nouveau pair decouvert ou attente de clé (ID) : {sender_id}")
+                        self.pending_handshakes[sender_id] = time.time()
+                        # Initiate handshake
+                        self.network_bridge.send_message("SECURE_HELLO", sender_ip, {
+                            "public_key": security.get_my_public_key_pem(),
+                            "peer_id": self.my_id
+                        })
+=======
                 if security and sender_id not in security.peer_public_keys:
                     print(f"[Online] Nouveau pair decouvert (ID) : {sender_id}")
                     # Initiate handshake
@@ -175,6 +189,7 @@ class Online(GameMode):
                         "public_key": security.get_my_public_key_pem(),
                         "peer_id": self.my_id
                     })
+>>>>>>> 152c4b2387993845f878fc81fcce50c0edaab082
 
             if msg_type == "SECURE_HELLO":
                 peer_public_key = payload.get("public_key")
@@ -182,13 +197,14 @@ class Online(GameMode):
                 if peer_id and peer_public_key:
                     print(f"[Security] Received HELLO from {peer_id}")
                     security.register_peer(peer_id, peer_public_key)
-                    # Respond with our key if they haven't seen it, and send session key
-                    encrypted_session_key = security.create_session_key(peer_id)
-                    self.network_bridge.send_message("SECURE_KEY_EXCHANGE", sender_ip, {
-                        "encrypted_key": encrypted_session_key,
-                        "peer_id": self.my_id,
-                        "public_key": security.get_my_public_key_pem() # Include our key just in case
-                    })
+                    # Respond with session key ONLY if we are the larger ID
+                    if self.my_id > peer_id:
+                        encrypted_session_key = security.create_session_key(peer_id)
+                        self.network_bridge.send_message("SECURE_KEY_EXCHANGE", sender_ip, {
+                            "encrypted_key": encrypted_session_key,
+                            "peer_id": self.my_id,
+                            "public_key": security.get_my_public_key_pem() # Include our key just in case
+                        })
                 continue
             
             if msg_type == "SECURE_KEY_EXCHANGE":
