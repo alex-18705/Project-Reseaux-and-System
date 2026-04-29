@@ -171,7 +171,6 @@ class Online(GameMode):
                     self.peer_ips[sender_id] = sender_ip
                 if security and sender_id not in security.peer_session_keys:
                     last_hello = self.pending_handshakes.get(sender_id, 0)
-                    import time
                     if time.time() - last_hello > 2.0:
                         print(f"[Online] Nouveau pair decouvert ou attente de clé (ID) : {sender_id}")
                         self.pending_handshakes[sender_id] = time.time()
