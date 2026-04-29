@@ -1,3 +1,5 @@
+import copy
+
 from backend.Class.Army import Army
 
 
@@ -32,8 +34,8 @@ class Test_coherence:
         return report
 
     def set_armies(self,my_army, othersArmy :dict):
-        self.MY_ARMY = my_army.deepcopy_unit()
-        self.OTHER_ARMY = othersArmy.deepcopy_unit()
+        self.MY_ARMY = copy.deepcopy(my_army)
+        self.OTHER_ARMY = copy.deepcopy(othersArmy)
 
     @staticmethod
     def compare_army(old_army, new_army,map, otherArmy):
