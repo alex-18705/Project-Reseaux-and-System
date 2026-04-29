@@ -137,6 +137,7 @@ class NetworkBridge:
         - Filtre les paquets obsolètes (numéro de séquence trop ancien).
         - Place les messages valides dans la file d'attente.
         """
+        _recv_count = 0
         while self.is_connected:
             try:
                 data, addr = self.sock.recvfrom(65535)
@@ -144,6 +145,9 @@ class NetworkBridge:
                     continue
 
                 ligne = data.decode('utf-8').strip()
+                _recv_count += 1
+                if _recv_count <= 5 or _recv_count % 50 == 0:
+                    print(f"[NetworkBridge] RAW recv #{_recv_count}: {len(data)} bytes from {addr}")
                 if not ligne:
                     continue
 
