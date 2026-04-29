@@ -302,8 +302,8 @@ class NetworkBridge:
             taille = len(donnees)
             """if taille > 1400:
                 print(f"[NetworkBridge] ATTENTION : datagramme volumineux "
-                      f"({taille} octets, MTU ~ 1500). Risque de fragmentation !")"""
-            return True
+                      f"({taille} octets, MTU ~ 1500). Risque de fragmentation !")
+            return True"""
         except Exception as e:
             print(f"[NetworkBridge] Erreur lors de l'envoi ({msg_type}) : {e}")
             return False
