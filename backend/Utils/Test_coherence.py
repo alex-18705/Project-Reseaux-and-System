@@ -29,7 +29,7 @@ class Test_coherence:
 
                 report.extend(self.compare_army(self.OTHER_ARMY[k], gamemode.othersArmy[k],gamemode.map, otherArmy))
 
-        self.print_report(report)
+        return report
 
     def set_armies(self,my_army, othersArmy :dict):
         self.MY_ARMY = my_army.deepcopy()
