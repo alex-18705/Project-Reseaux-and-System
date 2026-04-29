@@ -1,18 +1,16 @@
 import ast
-import json
-import os
 import uuid
-from pathlib import Path
 import time
 
 from backend.Class.Army import Army
 from backend.GameModes.GameMode import GameMode
+from backend.Utils.Test_coherence import Test_coherence
 from backend.Utils.class_by_name import general_from_name
 from backend.Class.Units.Knight import Knight
 from backend.Class.Units.Pikeman import Pikeman
 from backend.Class.Units.Crossbowman import Crossbowman
 from backend.Utils.network_ownership import initialize_ownership, get_ownership_manager
-from backend.Utils.convert_json import json_to_army, army_to_json, army_to_dict, map_to_dict, json_to_map
+from backend.Utils.convert_json import json_to_army, army_to_dict, map_to_dict, json_to_map
 from network.network_api import NetworkBridge
 
 
@@ -56,6 +54,8 @@ class Online(GameMode):
         self._army_mirrored_for_width = None
         self._last_known_remote_armies = 0
         self._last_logged_map_signature = None
+
+        self.Test_coherence = Test_coherence()
 
     def _map_signature(self):
         if self.map is None:
