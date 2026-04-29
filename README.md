@@ -129,3 +129,8 @@ L'Ownership Manager (`backend/Utils/network_ownership.py`) assure que :
 - Seul le propriétaire peut exécuter les actions (mouvements, attaques) de ses unités.
 - Les autres clients reçoivent l'état mis à jour et l'appliquent localement.
 - Supporte la découverte dynamique de nouveaux pairs.
+
+###Linux
+gcc -o network/proxy_udp_real_ip.x network/proxy_udp_real_ip.c -pthread
+python3 main.py online --create --general MajorDaft --army_file army/cube2.army --map_file map/superflat.map --pygame
+python3 main.py online --join [ip] --general MajorDaft --army_file army/cube2.army --map_file map/superflat.map --pygame
