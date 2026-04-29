@@ -1,3 +1,6 @@
+from backend.Class.Army import Army
+from backend.GameModes.GameMode import GameMode
+from backend.GameModes.Online import Online
 
 
 class Test_coherence:
@@ -7,13 +10,25 @@ class Test_coherence:
         self.OTHER_ARMY =None
 
 
-    def test_coherence(self,my_army, other_army :dict):
+
+
+    def test_coherence(self,gamemode : Online, map):
         report=[]
-        if self.MY_ARMY and my_army :
-            report.extend(self.compare_army(self.MY_ARMY, my_army))
-        for k in other_army.keys():
-            if self.OTHER_ARMY.get(k,None) and other_army.get(k,None) :
-                report.extend(self.compare_army(self.OTHER_ARMY[k], other_army[k]))
+        if self.MY_ARMY and gamemode.my_army :
+            report.extend(self.compare_army(self.MY_ARMY, gamemode.my_army,map, gamemode.flat()))
+        for k in gamemode.other_army.keys():
+            if self.OTHER_ARMY.get(k,None) and gamemode.other_army.get(k,None) :
+                other_list = gamemode.othersArmy.copy()
+                other_list.remove(k)
+                other_list["0"] = gamemode.my_army
+
+                otherArmy = Army()
+                all_units = []
+                for army_id in other_list:
+                    all_units.extend(other_list[army_id].units)
+                otherArmy.units = all_units
+
+                report.extend(self.compare_army(self.OTHER_ARMY[k], gamemode.other_army[k],map, otherArmy))
 
         self.print_report(report)
 
@@ -22,14 +37,12 @@ class Test_coherence:
         self.OTHER_ARMY = other_army.deepcopy()
 
     @staticmethod
-    def compare_army(old_army, new_army):
+    def compare_army(old_army, new_army,map, otherArmy):
         report =[]
         for unit in new_army.units:
             #collision
-
-
-
-
+            if new_army.try_collision(unit,map,unit.position, otherArmy) :
+                report.append({"type": "collision", "unit": unit})
 
             old_unit = old_army.get_unit_by_id(unit.id)
             if old_unit :
@@ -43,12 +56,7 @@ class Test_coherence:
                 if old_unit.cooldown != 0 and unit.cooldown > old_unit.cooldown:
                     report.append({"type":"cooldown", "unit" : unit})
 
-
-
-
-
-
-        return []
+        return report
 
     def print_report(self,report):
         pass
