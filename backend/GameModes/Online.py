@@ -302,22 +302,25 @@ class Online(GameMode):
         self._broadcast_state()
 
     def _broadcast_state(self):
-        payload = self.create_payload()
+
+        list_payload = self.create_payload()
         if not self.know_ip:
             # Envoie un paquet bidon pour enregistrer le port Python auprès du proxy C
-            self.network_bridge.send_message("SYNC_UPDATE", "0.0.0.0", payload)
+            for payload in list_payload:
+                self.network_bridge.send_message("SYNC_UPDATE", "0.0.0.0", payload)
             return
             
         # Broadcast to all known IPs
-        for ip in self.know_ip:
-            security = self.network_bridge.security_manager
-            if security and security.peer_session_keys:
-                # Send encrypted message to each peer we have a session with
-                for peer_id in security.peer_session_keys:
-                    self.network_bridge.send_message("SYNC_UPDATE", ip, payload, peer_id=peer_id)
-            else:
-                # Fallback to unencrypted if no session key yet (handshake period)
-                self.network_bridge.send_message("SYNC_UPDATE", ip, payload)
+        for payload in list_payload:
+            for ip in self.know_ip:
+                security = self.network_bridge.security_manager
+                if security and security.peer_session_keys:
+                    # Send encrypted message to each peer we have a session with
+                    for peer_id in security.peer_session_keys:
+                        self.network_bridge.send_message("SYNC_UPDATE", ip, payload, peer_id=peer_id)
+                else:
+                    # Fallback to unencrypted if no session key yet (handshake period)
+                    self.network_bridge.send_message("SYNC_UPDATE", ip, payload)
 
     def update_dead(self, all_enemies):
         for army in self.othersArmy.values():
@@ -357,19 +360,21 @@ class Online(GameMode):
                 self.othersArmy[k] = json_to_army(army[k])
 
     def create_payload(self):
-        armies = {
-            self.my_id: army_to_dict(self.my_army)
-        }
+
+
+        result = []
         # In multi-peer mode, everyone should ideally know about everyone.
         # If we only send OUR army, a new peer joining P1 (host) might not see P2 if P2 doesn't know P3 yet.
         # So we broadcast all known armies.
         for army_id, army in self.othersArmy.items():
-            armies[army_id] = army_to_dict(army)
+            result.append({army_id: army_to_dict(army)})
 
-        result = {"armies": armies}
+
+        result1 = {"armies": { self.my_id: army_to_dict(self.my_army)}}
         # Only host (is_first) decides the map to avoid conflicts
         if self.is_first and self.map is not None and (self.tick < 20 or self.tick % 50 == 0):
-            result["map"] = map_to_dict(self.map)
+            result1["map"] = map_to_dict(self.map)
+        result.append(result1)
         return result
 
 
