@@ -122,6 +122,10 @@ MessageType message_type_from_string(const char *type){
         return MSG_STATE_UPDATE;
     } else if (strcmp(type, TYPE_OWNERSHIP_RETURN) == 0) {
         return MSG_OWNERSHIP_RETURN;
+    } else if (strcmp(type, TYPE_PING) == 0) {
+        return MSG_PING;
+    } else if (strcmp(type, TYPE_PONG) == 0) {
+        return MSG_PONG;
     } else {
         return MSG_UNKNOWN;
     }
@@ -149,6 +153,9 @@ int parse_message(const char *json_str, Message *msg){
     }
 
     msg->kind = message_type_from_string(msg->type);
+    if(msg->kind == MSG_UNKNOWN){
+        return -1;
+    }
     if (extract_json_string(json_str, "sender_id", msg->sender_peer_id, sizeof(msg->sender_peer_id)) != 0) {
         if (extract_json_string(json_str, "sender_peer_id", msg->sender_peer_id, sizeof(msg->sender_peer_id)) != 0) {
             return -1;

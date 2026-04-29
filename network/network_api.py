@@ -159,7 +159,16 @@ class NetworkBridge:
             "entity_id": entity_id,
             "state": entity_state,
         })
-
+    
+    def ping(self, target_peer_id=""):
+        return self.send_message("PING", target_peer_id, {})
+    
+    def pong(self, target_peer_id=""):
+        return self.send_message("PONG", target_peer_id, {})
+    
+    def shutdown(self):
+        return self.send_message("SHUTDOWN", "", {})
+    
     def get_updates(self):
         messages = []
         while not self.incoming_queue.empty():

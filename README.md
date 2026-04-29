@@ -71,28 +71,68 @@ https://drive.google.com/file/d/1T1PBgwUbtoPRrT4uYkOi8iOA9RJ1wf_O/view?usp=drive
   - **S**: quick-save
   - **L**: open load menu
 
-python main.py online --create --peer_id player_A --remote_peer_id player_B --general MajorDaft --army_file army/cube.army --map_file map/superflat.map --pygame --py_port 5000 --lan_port 6000 --remote_port 6001
 
-python main.py online --join 127.0.0.1 --peer_id player_B --remote_peer_id player_A --general MajorDaft --army_file army/cube.army --map_file map/superflat.map --pygame --py_port 5001 --lan_port 6001 --remote_port 6000
+# Online test commands
 
-python main.py online --create --peer_id player_A --spawn_index 0 --spawn_count 3 --general MajorDaft --army_file army/cube.army --map_file map/superflat.map --pygame --py_port 5000 --lan_port 6000 --peer player_B:127.0.0.1:6001 --peer player_C:127.0.0.1:6002
-
-python main.py online --create --peer_id player_B --spawn_index 1 --spawn_count 3 --general MajorDaft --army_file army/cube.army --map_file map/superflat.map --pygame --py_port 5001 --lan_port 6001 --peer player_A:127.0.0.1:6000 --peer player_C:127.0.0.1:6002
-
-python main.py online --create --peer_id player_C --spawn_index 2 --spawn_count 3 --general MajorDaft --army_file army/cube.army --map_file map/superflat.map --pygame --py_port 5002 --lan_port 6002 --peer player_A:127.0.0.1:6000 --peer player_B:127.0.0.1:6001
-
-python main.py online --create --peer_id player_D --spawn_index 3 --spawn_count 4 --general MajorDaft --army_file army/cube.army --map_file map/superflat.map --pygame --py_port 5002 --lan_port 6002 --peer player_A:127.0.0.1:6000 --peer player_B:127.0.0.1:6001
-
-# 4 PEERS
+## 2 peers on one machine
 
 Terminal 1:
-python main.py online --create --peer_id player_A --spawn_index 0 --spawn_count 4 --general MajorDaft --army_file army/cube.army --map_file map/superflat.map --pygame --py_port 5000 --lan_port 6000 --peer player_B:127.0.0.1:6001 --peer player_C:127.0.0.1:6002 --peer player_D:127.0.0.1:6003
+```powershell
+python main.py online --create --peer_id player_A --spawn_index 0 --spawn_count 2 --general MajorDaft --army_file army/cube.army --map_file map/superflat.map --pygame --py_port 5000 --lan_port 6000 --peer player_B:127.0.0.1:6001
+```
 
 Terminal 2:
-python main.py online --create --peer_id player_B --spawn_index 1 --spawn_count 4 --general MajorDaft --army_file army/cube.army --map_file map/superflat.map --pygame --py_port 5001 --lan_port 6001 --peer player_A:127.0.0.1:6000 --peer player_C:127.0.0.1:6002 --peer player_D:127.0.0.1:6003
+```powershell
+python main.py online --create --peer_id player_B --spawn_index 1 --spawn_count 2 --general MajorDaft --army_file army/cube.army --map_file map/superflat.map --pygame --py_port 5001 --lan_port 6001 --peer player_A:127.0.0.1:6000
+```
+
+## 3 peers on one machine
+
+Terminal 1:
+```powershell
+python main.py online --create --peer_id player_A --spawn_index 0 --spawn_count 3 --general MajorDaft --army_file army/cube.army --map_file map/superflat.map --pygame --py_port 5000 --lan_port 6000 --peer player_B:127.0.0.1:6001 --peer player_C:127.0.0.1:6002
+```
+
+Terminal 2:
+```powershell
+python main.py online --create --peer_id player_B --spawn_index 1 --spawn_count 3 --general MajorDaft --army_file army/cube.army --map_file map/superflat.map --pygame --py_port 5001 --lan_port 6001 --peer player_A:127.0.0.1:6000 --peer player_C:127.0.0.1:6002
+```
 
 Terminal 3:
+```powershell
+python main.py online --create --peer_id player_C --spawn_index 2 --spawn_count 3 --general MajorDaft --army_file army/cube.army --map_file map/superflat.map --pygame --py_port 5002 --lan_port 6002 --peer player_A:127.0.0.1:6000 --peer player_B:127.0.0.1:6001
+```
+
+## 4 peers on one machine
+
+Terminal 1:
+```powershell
+python main.py online --create --peer_id player_A --spawn_index 0 --spawn_count 4 --general MajorDaft --army_file army/cube.army --map_file map/superflat.map --pygame --py_port 5000 --lan_port 6000 --peer player_B:127.0.0.1:6001 --peer player_C:127.0.0.1:6002 --peer player_D:127.0.0.1:6003
+```
+
+Terminal 2:
+```powershell
+python main.py online --create --peer_id player_B --spawn_index 1 --spawn_count 4 --general MajorDaft --army_file army/cube.army --map_file map/superflat.map --pygame --py_port 5001 --lan_port 6001 --peer player_A:127.0.0.1:6000 --peer player_C:127.0.0.1:6002 --peer player_D:127.0.0.1:6003
+```
+
+Terminal 3:
+```powershell
 python main.py online --create --peer_id player_C --spawn_index 2 --spawn_count 4 --general MajorDaft --army_file army/cube.army --map_file map/superflat.map --pygame --py_port 5002 --lan_port 6002 --peer player_A:127.0.0.1:6000 --peer player_B:127.0.0.1:6001 --peer player_D:127.0.0.1:6003
+```
 
 Terminal 4:
+```powershell
 python main.py online --create --peer_id player_D --spawn_index 3 --spawn_count 4 --general MajorDaft --army_file army/cube.army --map_file map/superflat.map --pygame --py_port 5003 --lan_port 6003 --peer player_A:127.0.0.1:6000 --peer player_B:127.0.0.1:6001 --peer player_C:127.0.0.1:6002
+```
+
+## Multiple machines on LAN
+
+Replace `127.0.0.1` with the real LAN IP of each machine. If each machine runs only one peer, every machine can keep `--py_port 5000 --lan_port 6000`.
+
+
+
+python main.py online --create --peer_id player_A --spawn_index 0 --spawn_count 2 --general MajorDaft --army_file army/cube.army --map_file map/superflat.map --pygame --py_port 5000 --lan_port 6000 --peer player_B:127.0.0.1:6001
+
+
+python main.py online --create --peer_id player_B --spawn_index 1 --spawn_count 2 --general MajorDaft --army_file army/cube.army --map_file map/superflat.map --pygame --py_port 5001 --lan_port 6001 --peer player_A:127.0.0.1:6000
+

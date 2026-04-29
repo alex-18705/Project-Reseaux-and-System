@@ -160,6 +160,9 @@ int broadcast_to_peers(AppContext *ctx, const char *msg, size_t len) {
         if (!ctx->peers[i].active) {
             continue;
         }
+        if (ctx->local_peer_id[0] != '\0' && strcmp(ctx->peers[i].peer_id, ctx->local_peer_id) == 0) {
+            continue;
+        }
         if (send_to_peer_index(ctx, i, msg, len) >= 0) {
             sent_count++;
         }

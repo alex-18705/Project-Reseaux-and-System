@@ -28,6 +28,12 @@ static void remember_peer_from_message(AppContext *ctx, const Message *msg, cons
     }
 }
 
+static int route_to_peer_or_broadcast(AppContext *ctx, const Message *msg, const char *buffer, size_t len){
+    if (msg->target_peer_id[0] == '\0') {
+        return broadcast_to_peers(ctx, buffer, len);
+    }
+    return send_to_peer_id(ctx, msg->target_peer_id, buffer, len);
+}
 static int forward_to_python(AppContext *ctx, const char *buffer, size_t len) {
     int sent;
     if (!ctx || !buffer || len == 0) {
@@ -75,7 +81,11 @@ static int forward_to_peers(AppContext *ctx, const Message *msg, const char *buf
         
         case MSG_BROADCAST:
         case MSG_STATE_UPDATE:
-            return broadcast_to_peers(ctx, buffer, len);
+        case MSG_PING:
+        case MSG_PONG:
+            return route_to_peer_or_broadcast(ctx, msg, buffer, len);
+
+            // return broadcast_to_peers(ctx, buffer, len);
 
         case MSG_UNKNOWN:
         default:
@@ -133,7 +143,9 @@ void handle_python_data(AppContext *ctx) {
 
     received = ipc_recv_from_python(ctx, buffer, sizeof(buffer));
     if (received < 0) {
-        stop("recv from python");
+        fprintf(stderr, "[handlers] Python IPC receive error, stopping proxy\n");
+        ctx->running = 0;
+        return;
     }
     if (received == 0) {
         printf("[handlers] Python disconnected\n");

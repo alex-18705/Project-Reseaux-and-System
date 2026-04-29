@@ -1,904 +1,815 @@
-# CHECK.md — Vérification V1 du Proxy Réseau C + Python Bridge
+# CHECK_V1_V2.md — Distributed AI Battle Game Network Audit
 
-## 1. Objectif du document
-
-Ce fichier sert à vérifier si l’implémentation réseau actuelle respecte les exigences minimales d’une version V1 pour le projet :
+## Project Architecture
 
 ```text
-Python local <-> Proxy C local <-> Proxy C distant <-> Python distant
+Python AI/Game
+    ↕ TCP localhost (IPC)
+C Proxy
+    ↕ UDP LAN
+Other C Proxies / Peers
 ```
 
-L’architecture actuelle repose sur :
+The project is a peer-to-peer distributed AI battle game.
 
-- un proxy C UDP (`proxy_udp.c`) ;
-- une API Python (`network_api.py` / `NetworkBridge`) ;
-- une communication UDP localhost entre Python et C ;
-- une communication UDP LAN entre deux proxys C.
+Each peer runs:
 
-Dans cette version, le proxy C agit principalement comme un relais de paquets UDP. Il ne comprend pas forcément le contenu JSON.
+- one Python process for AI and game logic
+- one C process for IPC and network routing
+- TCP localhost between Python and C
+- UDP between C proxies
+- JSON messages
+- no central server
 
 ---
 
-## 2. Architecture attendue
+# Version 1 — Core Networking Checklist
 
-### 2.1 Flux général
+Version 1 validates the minimum distributed networking layer.
+
+Expected goal:
 
 ```text
-Python App A
-   |
-   | UDP localhost
-   v
-NetworkBridge A
-   |
-   | 127.0.0.1:py_port
-   v
-Proxy C A
-   |
-   | UDP LAN
-   v
-Proxy C B
-   |
-   | 127.0.0.1:py_port
-   v
-NetworkBridge B
-   |
-   v
-Python App B
+Python local ↔ C proxy local ↔ UDP ↔ C proxy remote ↔ Python remote
 ```
 
-### 2.2 Rôle de chaque composant
-
-| Composant              | Rôle attendu                                                  |
-| ---------------------- | ------------------------------------------------------------- |
-| `NetworkBridge` Python | Envoyer/recevoir des messages JSON depuis la logique Python   |
-| `py_sock` dans C       | Recevoir/envoyer des paquets UDP depuis/vers Python local     |
-| `lan_sock` dans C      | Recevoir/envoyer des paquets UDP depuis/vers les pairs réseau |
-| `proxy_udp.c`          | Relayer les paquets entre Python et le LAN                    |
-| JSON protocol          | Donner un format commun aux messages échangés                 |
-
----
-
-## 3. Checklist fonctionnelle V1
-
-### 3.1 Communication Python -> C
-
-- [ ] Python crée un socket UDP.
-- [ ] Python envoie vers `127.0.0.1:<py_port>`.
-- [ ] Le proxy C bind correctement `py_sock` sur `127.0.0.1:<py_port>`.
-- [ ] Le proxy C reçoit bien le premier paquet Python.
-- [ ] Le proxy C mémorise le port éphémère de Python.
-- [ ] Le proxy C affiche un log du type :
+For multi-peer testing:
 
 ```text
-[IPC] Client Python attaché sur le port XXXXX
-```
-
-### 3.2 Communication C -> Python
-
-- [ ] Le proxy C connaît l’adresse de Python (`py_client_known = 1`).
-- [ ] Quand un paquet LAN arrive, le proxy C le forward vers Python.
-- [ ] `NetworkBridge._listen_loop()` reçoit le paquet.
-- [ ] Le paquet reçu est décodable en UTF-8.
-- [ ] Le paquet reçu est un JSON valide.
-- [ ] Le message est placé dans `incoming_queue`.
-- [ ] `get_updates()` retourne bien les messages reçus.
-
-### 3.3 Communication C -> peer LAN
-
-- [ ] Le proxy C possède un `lan_sock` bindé sur `0.0.0.0:<lan_listen_port>`.
-- [ ] En mode client, `remote_ip` est fourni.
-- [ ] En mode client, `remote_peer_known = 1` dès le démarrage.
-- [ ] En mode serveur, le peer distant doit envoyer au moins un paquet pour être découvert.
-- [ ] Le proxy C peut envoyer vers `remote_peer_addr`.
-- [ ] Le firewall autorise UDP sur le port LAN choisi.
-
-### 3.4 Communication peer LAN -> C
-
-- [ ] Le peer distant connaît l’IP et le port LAN de ce proxy.
-- [ ] Un paquet UDP arrive sur `lan_listen_port`.
-- [ ] `lan_to_py_thread()` reçoit ce paquet.
-- [ ] Le proxy C mémorise l’adresse du peer distant.
-- [ ] Le proxy C affiche un log du type :
-
-```text
-[LAN] IP distante découverte : x.x.x.x:port
+peer_1 ↔ peer_2 ↔ peer_3
 ```
 
 ---
 
-## 4. Checklist protocol JSON
+## 1. IPC Layer: Python ↔ C Proxy
 
-### 4.1 Format attendu côté Python
+### Requirements
 
-Le message envoyé par `NetworkBridge.send_message()` a actuellement la forme :
+- [ ] Python connects to C proxy through TCP localhost.
+- [ ] C proxy listens on a TCP localhost port.
+- [ ] Python can send JSON messages to C.
+- [ ] C can send JSON messages back to Python.
+- [ ] Messages use newline framing: `\n`.
+- [ ] Python receive loop runs in a separate thread.
+- [ ] C event loop can detect Python messages.
+- [ ] Disconnect is handled cleanly.
+
+### Test
+
+```text
+1. Start C proxy.
+2. Start Python NetworkBridge.
+3. Send JOIN from Python.
+4. Verify C proxy receives and parses JOIN.
+5. Send a test message from C to Python.
+6. Verify Python receives it in get_updates().
+```
+
+### Potential Bugs
+
+- [ ] Python uses TCP but C expects UDP.
+- [ ] Python sends newline-delimited JSON but C does not parse by line.
+- [ ] C sends raw JSON without `\n`, causing Python recv buffer to wait.
+- [ ] `recv()` blocks forever.
+- [ ] socket closes without graceful cleanup.
+- [ ] multiple Python clients accidentally connect to same proxy port.
+
+---
+
+## 2. UDP Layer: C Proxy ↔ C Proxy
+
+### Requirements
+
+- [ ] C proxy opens a UDP socket.
+- [ ] C proxy binds to a LAN port.
+- [ ] C proxy can send UDP packets to another proxy.
+- [ ] C proxy can receive UDP packets from another proxy.
+- [ ] UDP receive loop is non-blocking or integrated into event loop.
+- [ ] UDP address and port are stored correctly.
+
+### Test
+
+```text
+peer_1 sends UDP packet to peer_2
+peer_2 receives it
+peer_2 sends response
+peer_1 receives response
+```
+
+### Potential Bugs
+
+- [ ] wrong IP address used.
+- [ ] wrong UDP port used.
+- [ ] firewall blocks UDP.
+- [ ] two proxies bind the same port on the same machine.
+- [ ] UDP socket receives packets but handler is never called.
+- [ ] `sendto()` return value is not checked.
+
+---
+
+## 3. Message Protocol V1
+
+### Required Message Types
+
+For Version 1, recommended minimal types:
+
+```c
+JOIN
+STATE_UPDATE
+PING
+PONG
+SHUTDOWN
+```
+
+### Required JSON Format
 
 ```json
 {
-  "size": 1,
-  "dest": "192.168.1.20",
-  "dep": null,
-  "seq": 1,
-  "type": "SYNC_UPDATE",
+  "type": "STATE_UPDATE",
+  "sender_id": "peer_1",
+  "target_peer_id": "",
   "payload": {
-    "example": "data"
+    "seq": 42,
+    "state": {}
   }
 }
 ```
 
-À vérifier :
+### Requirements
 
-- [ ] Tous les messages possèdent un champ `type`.
-- [ ] Tous les messages possèdent un champ `payload`.
-- [ ] Les messages importants possèdent un champ `seq`.
-- [ ] Le JSON reste inférieur à environ 1400 octets si possible.
-- [ ] Le destinataire sait interpréter le même format JSON.
+- [ ] every message has `type`.
+- [ ] every message has `sender_id`.
+- [ ] every message has `target_peer_id`.
+- [ ] broadcast uses `target_peer_id == ""`.
+- [ ] `STATE_UPDATE` includes `payload.seq`.
+- [ ] `STATE_UPDATE` includes `payload.state`.
 
-### 4.2 Problème actuel important
+### Potential Bugs
 
-Le proxy C actuel ne lit pas les champs JSON :
+- [ ] Python and C use different field names.
+- [ ] sequence number is sometimes inside payload and sometimes outside.
+- [ ] C parser assumes fixed JSON order.
+- [ ] malformed JSON crashes proxy.
+- [ ] missing `sender_id` prevents per-peer filtering.
+
+---
+
+## 4. Peer Manager V1
+
+### Requirements
+
+- [ ] peer table supports at least 3 peers.
+- [ ] each peer has a unique `peer_id`.
+- [ ] each peer stores UDP IP and port.
+- [ ] peer can be added on JOIN.
+- [ ] peer can be found by `peer_id`.
+- [ ] inactive peers can be removed or ignored.
+- [ ] duplicate JOIN does not create duplicate peer entries.
+
+### Example Peer Table
 
 ```text
-Le champ "dest" n’est pas utilisé par le proxy C.
-Le champ "type" n’est pas utilisé par le proxy C.
-Le champ "payload" n’est pas utilisé par le proxy C.
+peer_id    ip              udp_port    active
+peer_1     192.168.1.10    6000        yes
+peer_2     192.168.1.11    6000        yes
+peer_3     192.168.1.12    6000        yes
 ```
 
-Donc le proxy C ne fait pas du routage intelligent. Il fait seulement :
+### Potential Bugs
+
+- [ ] only one `remote_peer_addr` is stored.
+- [ ] new peer overwrites old peer.
+- [ ] peer_id is not linked to UDP address.
+- [ ] disconnected peers remain forever.
+- [ ] broadcast sends to inactive peers.
+
+---
+
+## 5. Routing Logic V1
+
+### Expected Logic
 
 ```text
-recevoir paquet -> forward vers l’unique peer connu
+if target_peer_id == "":
+    broadcast to all peers except sender
+else:
+    send only to target_peer_id
+```
+
+### Requirements
+
+- [ ] broadcast supported.
+- [ ] direct send supported.
+- [ ] sender does not receive its own broadcast.
+- [ ] unknown target is handled safely.
+- [ ] invalid message is dropped safely.
+
+### Test: 3 Peers
+
+```text
+peer_1 sends STATE_UPDATE with target_peer_id=""
+Expected:
+- peer_2 receives it
+- peer_3 receives it
+- peer_1 does not apply its own update again
+```
+
+### Potential Bugs
+
+- [ ] broadcast only reaches one peer.
+- [ ] peer receives its own update and duplicates state.
+- [ ] broadcast loop happens between proxies.
+- [ ] target_peer_id is ignored.
+- [ ] unknown peer causes crash.
+
+---
+
+## 6. STATE_UPDATE Synchronization V1
+
+### Requirements
+
+- [ ] Python AI/game periodically generates state.
+- [ ] Python sends `STATE_UPDATE`.
+- [ ] C proxy forwards `STATE_UPDATE`.
+- [ ] remote Python receives `STATE_UPDATE`.
+- [ ] remote game applies remote state.
+- [ ] outdated packets are discarded.
+- [ ] sequence filtering is per sender.
+
+### Correct Sequence Key
+
+```text
+(sender_id, message_type)
+```
+
+### Test
+
+```text
+peer_1 sends seq=1
+peer_1 sends seq=2
+peer_1 sends delayed seq=1 again
+
+Expected:
+seq=1 accepted first time
+seq=2 accepted
+delayed seq=1 ignored
+```
+
+### Potential Bugs
+
+- [ ] global sequence number rejects valid updates from other peers.
+- [ ] old state overwrites new state.
+- [ ] missing seq makes filtering impossible.
+- [ ] peer reconnects and seq resets, causing updates to be ignored.
+
+---
+
+## 7. Python NetworkBridge V1
+
+### Requirements
+
+- [ ] `connect()` implemented.
+- [ ] `send_message()` implemented.
+- [ ] `send_state_update()` implemented.
+- [ ] `get_updates()` implemented.
+- [ ] `disconnect()` implemented.
+- [ ] receive thread implemented.
+- [ ] incoming queue implemented.
+- [ ] sequence filtering implemented.
+
+### Recommended Minimal API
+
+```python
+bridge = NetworkBridge(peer_id="peer_1")
+bridge.connect()
+bridge.join()
+bridge.send_state_update(state)
+updates = bridge.get_updates()
+bridge.disconnect()
+```
+
+### Potential Bugs
+
+- [ ] bridge expects TCP but proxy uses UDP.
+- [ ] bridge does not start proxy or proxy is not already running.
+- [ ] recv buffer splits JSON message.
+- [ ] send_message does not append newline.
+- [ ] disconnect closes socket while thread is reading.
+
+---
+
+## 8. C Proxy V1
+
+### Requirements
+
+- [ ] initializes context.
+- [ ] initializes IPC TCP socket.
+- [ ] initializes UDP socket.
+- [ ] runs event loop.
+- [ ] parses Python messages.
+- [ ] parses UDP peer messages.
+- [ ] forwards Python → UDP.
+- [ ] forwards UDP → Python.
+- [ ] uses peer_manager.
+- [ ] handles invalid input safely.
+
+### Potential Bugs
+
+- [ ] event loop watches wrong file descriptors.
+- [ ] Python fd not registered.
+- [ ] UDP fd not registered.
+- [ ] C parser fails on compact JSON.
+- [ ] buffer is not null-terminated before parsing.
+- [ ] `send()` or `sendto()` partial/error not handled.
+
+---
+
+# Version 1 Final Validation
+
+Mark complete only if all are true:
+
+- [ ] Python ↔ C IPC works.
+- [ ] C ↔ C UDP works.
+- [ ] JSON protocol is consistent.
+- [ ] at least 3 peers can be stored.
+- [ ] broadcast works.
+- [ ] direct routing works.
+- [ ] STATE_UPDATE sync works.
+- [ ] out-of-order STATE_UPDATE is ignored.
+- [ ] invalid JSON does not crash proxy.
+- [ ] clean shutdown works.
+
+Result:
+
+```text
+[ ] Version 1 complete
+[ ] Version 1 incomplete
 ```
 
 ---
 
-## 5. Bugs et risques potentiels dans `proxy_udp.c`
+# Version 2 — Ownership and Distributed Authority Checklist
 
-### BUG 1 — Le serveur ne peut pas envoyer si le peer n’a pas encore parlé
+Version 2 validates distributed ownership of game entities.
 
-En mode serveur, `remote_peer_known = 0`. Donc si Python envoie avant que le peer distant ait envoyé un paquet, le proxy ne sait pas où forwarder.
+Version 1 synchronizes state.
 
-Code concerné :
+Version 2 decides which peer has authority over which entity.
+
+Example:
+
+```text
+peer_1 owns army_1
+peer_2 owns army_2
+peer_3 observes both
+```
+
+A peer should not freely modify an entity it does not own unless ownership is transferred.
+
+---
+
+## 9. Ownership Model V2
+
+### Required Message Types
 
 ```c
-if (remote_peer_known) {
-    sendto(lan_sock, buffer, n, 0, (struct sockaddr*)&remote_peer_addr, sizeof(remote_peer_addr));
+OWNERSHIP_REQUEST
+OWNERSHIP_TRANSFER
+OWNERSHIP_DENIED
+OWNERSHIP_RETURN
+STATE_UPDATE
+```
+
+### Recommended Ownership Fields
+
+```json
+{
+  "type": "OWNERSHIP_REQUEST",
+  "sender_id": "peer_2",
+  "target_peer_id": "peer_1",
+  "payload": {
+    "entity_id": "army_1",
+    "reason": "combat_interaction"
+  }
 }
 ```
 
-Risque :
+### Requirements
 
-```text
-Python envoie un message, mais rien n’arrive au peer.
-```
+- [ ] each entity has an owner.
+- [ ] owner is identified by `owner_peer_id`.
+- [ ] only owner can authoritatively update an entity.
+- [ ] non-owner must request ownership before modifying entity.
+- [ ] ownership state is stored locally.
+- [ ] ownership changes are propagated to peers.
 
-Solution possible :
+### Potential Bugs
 
-- fournir `remote_ip` même côté serveur ;
-- ajouter un handshake `HELLO` ;
-- ajouter une configuration explicite des peers ;
-- stocker plusieurs peers dans une table.
-
----
-
-### BUG 2 — Un seul peer supporté
-
-Le code C ne possède qu’une seule adresse distante :
-
-```c
-static struct sockaddr_in remote_peer_addr;
-static int remote_peer_known = 0;
-```
-
-Risque :
-
-```text
-Impossible de gérer plusieurs joueurs/pairs correctement.
-```
-
-Solution possible :
-
-- ajouter un `peer_manager` ;
-- stocker une liste d’adresses IP/port ;
-- utiliser le champ `dest` du JSON pour choisir le peer.
+- [ ] two peers believe they own the same entity.
+- [ ] entity has no owner.
+- [ ] ownership transfer is accepted without validation.
+- [ ] old ownership state overwrites new ownership state.
+- [ ] peer modifies remote-owned entity directly.
 
 ---
 
-### BUG 3 — `dest` côté Python est ignoré par le proxy C
+## 10. OWNERSHIP_REQUEST V2
 
-Dans Python :
+### Expected Behavior
 
-```python
-message = {
-    "dest": destination,
-    ...
+```text
+peer_2 wants to control entity owned by peer_1
+peer_2 sends OWNERSHIP_REQUEST to peer_1
+```
+
+### Requirements
+
+- [ ] request includes `entity_id`.
+- [ ] request includes sender.
+- [ ] request targets current owner.
+- [ ] owner checks whether transfer is allowed.
+- [ ] duplicate requests are handled safely.
+
+### Test
+
+```text
+peer_2 requests ownership of army_1 from peer_1
+peer_1 receives request
+peer_1 decides transfer or deny
+```
+
+### Potential Bugs
+
+- [ ] request sent to wrong peer.
+- [ ] request accepted by non-owner.
+- [ ] repeated requests flood the network.
+- [ ] missing entity_id crashes handler.
+
+---
+
+## 11. OWNERSHIP_TRANSFER V2
+
+### Expected Behavior
+
+```text
+current owner transfers entity to requester
+```
+
+### Example
+
+```json
+{
+  "type": "OWNERSHIP_TRANSFER",
+  "sender_id": "peer_1",
+  "target_peer_id": "peer_2",
+  "payload": {
+    "entity_id": "army_1",
+    "new_owner_id": "peer_2",
+    "state": {}
+  }
 }
 ```
 
-Mais dans `proxy_udp.c`, le proxy ne parse pas ce champ.
+### Requirements
 
-Risque :
+- [ ] transfer includes `entity_id`.
+- [ ] transfer includes `new_owner_id`.
+- [ ] transfer includes latest entity state.
+- [ ] receiver updates local ownership table.
+- [ ] previous owner stops updating entity.
+- [ ] other peers are informed if required.
 
-```text
-Même si Python indique une destination, le proxy C envoie seulement au dernier/unique peer connu.
-```
+### Potential Bugs
 
-Solution possible :
-
-- parser le JSON côté C ;
-- utiliser `dest` pour choisir l’adresse distante ;
-- ou supprimer `dest` en V1 si le projet ne supporte qu’un seul peer.
-
----
-
-### BUG 4 — Calcul incorrect du champ `size`
-
-Dans Python :
-
-```python
-"size": len(payload_dict)
-```
-
-`len(payload_dict)` donne le nombre de clés du dictionnaire, pas la taille du paquet en octets.
-
-Exemple :
-
-```python
-payload_dict = {"message": "bonjour"}
-len(payload_dict) == 1
-```
-
-Mais la vraie taille en octets est différente.
-
-Risque :
-
-```text
-Le champ size est faux et peut induire en erreur si quelqu’un l’utilise pour valider le paquet.
-```
-
-Solution possible :
-
-Calculer `size` après sérialisation :
-
-```python
-message_without_size = {...}
-donnees = json.dumps(message_without_size, separators=(',', ':')).encode('utf-8')
-message["size"] = len(donnees)
-```
+- [ ] two peers update same entity after transfer.
+- [ ] transfer does not include latest state.
+- [ ] receiver accepts transfer for wrong entity.
+- [ ] transfer is not broadcast to observers.
+- [ ] stale transfer overrides newer ownership.
 
 ---
 
-### BUG 5 — Champ `dep` toujours `None`
+## 12. OWNERSHIP_DENIED V2
 
-Dans Python :
-
-```python
-"dep": None
-```
-
-Risque :
+### Expected Behavior
 
 ```text
-Le récepteur ne connaît pas clairement l’adresse logique de l’émetteur.
+owner refuses ownership transfer
 ```
 
-Solution possible :
+### Requirements
 
-- remplir `dep` avec l’IP locale ;
-- ou utiliser un identifiant logique de joueur ;
-- ou supprimer ce champ si inutile en V1.
+- [ ] denial includes `entity_id`.
+- [ ] denial includes reason.
+- [ ] requester keeps entity as remote-controlled.
+- [ ] requester does not modify denied entity.
+
+### Potential Bugs
+
+- [ ] requester ignores denial.
+- [ ] requester already modified entity before denial.
+- [ ] denial has no entity_id.
+- [ ] denial arrives after a transfer and incorrectly cancels it.
 
 ---
 
-### BUG 6 — `_sender_ip` dans Python ne représente pas le vrai peer distant
+## 13. OWNERSHIP_RETURN V2
 
-Dans `_listen_loop()` :
-
-```python
-msg["_sender_ip"] = addr[0]
-```
-
-Mais `addr[0]` est normalement `127.0.0.1`, car Python reçoit le paquet depuis le proxy C local, pas directement depuis le peer distant.
-
-Risque :
+### Expected Behavior
 
 ```text
-Python peut croire que le sender est 127.0.0.1 au lieu de l’IP réelle du peer.
+temporary owner returns entity to original owner or neutral owner
 ```
 
-Solution possible :
+### Requirements
 
-- faire ajouter l’IP réelle par le proxy C dans le JSON ;
-- ou ne pas utiliser `_sender_ip` pour identifier le peer réel.
+- [ ] return includes `entity_id`.
+- [ ] return includes latest entity state.
+- [ ] original owner accepts ownership back.
+- [ ] ownership table is updated.
+- [ ] other peers are informed if needed.
+
+### Potential Bugs
+
+- [ ] entity returns with stale state.
+- [ ] original owner not found.
+- [ ] both temporary and original owner keep updating entity.
+- [ ] ownership return not propagated.
 
 ---
 
-### BUG 7 — Pas de vérification des erreurs `sendto()` dans C
+## 14. Ownership State Table V2
 
-Le code C appelle :
-
-```c
-sendto(...);
-```
-
-sans vérifier le retour.
-
-Risque :
+### Required Local Table
 
 ```text
-Si l’envoi échoue, le programme ne le signale pas.
+entity_id    owner_peer_id    version    last_seq
+army_1       peer_1           3          120
+army_2       peer_2           1          55
 ```
 
-Solution possible :
+### Requirements
 
-```c
-int sent = sendto(...);
-if (sent < 0) {
-    perror("sendto");
-}
-```
+- [ ] each entity has owner.
+- [ ] ownership has version or timestamp.
+- [ ] stale ownership messages are ignored.
+- [ ] transfer increments ownership version.
+- [ ] state update checks owner before applying.
+
+### Potential Bugs
+
+- [ ] no versioning.
+- [ ] stale ownership transfer accepted.
+- [ ] entity owner differs across peers.
+- [ ] ownership state not included in sync.
 
 ---
 
-### BUG 8 — `sender_len` devrait être réinitialisé dans chaque boucle
+## 15. Authority Check V2
 
-Actuellement :
-
-```c
-socklen_t sender_len = sizeof(sender_addr);
-while (1) {
-    int n = recvfrom(..., &sender_len);
-}
-```
-
-Plus robuste :
-
-```c
-while (1) {
-    sender_len = sizeof(sender_addr);
-    int n = recvfrom(..., &sender_len);
-}
-```
-
-Risque :
+### Rule
 
 ```text
-Comportement moins robuste sur certaines plateformes.
+A peer may send authoritative STATE_UPDATE only for entities it owns.
 ```
+
+### Requirements
+
+- [ ] outgoing state only contains owned entities or marks authority clearly.
+- [ ] incoming state is checked against known owner.
+- [ ] invalid state update from non-owner is ignored or treated as non-authoritative.
+- [ ] conflict is logged.
+
+### Test
+
+```text
+peer_2 sends STATE_UPDATE for army_1 owned by peer_1
+Expected:
+peer_3 rejects or ignores that part of the state
+```
+
+### Potential Bugs
+
+- [ ] all peers overwrite all entities.
+- [ ] non-owner update accepted.
+- [ ] no distinction between authoritative and observed state.
+- [ ] state_update bypasses ownership logic.
 
 ---
 
-### BUG 9 — Race condition entre threads C
+## 16. Conflict Handling V2
 
-Les deux threads accèdent à des variables globales :
+### Conflict Cases
 
-```c
-py_client_known
-remote_peer_known
-py_client_addr
-remote_peer_addr
-```
+- two ownership transfers for same entity
+- delayed STATE_UPDATE from old owner
+- requester modifies before ownership granted
+- peer disconnects while owning entity
+- simultaneous requests for same entity
 
-sans mutex.
+### Requirements
 
-Risque :
+- [ ] conflicts are detected.
+- [ ] deterministic resolution exists.
+- [ ] stale messages are ignored using version/seq.
+- [ ] disconnect ownership policy exists.
+
+### Recommended Simple Policy
 
 ```text
-Lecture/écriture concurrente non protégée.
+1. Owner with highest ownership_version wins.
+2. For same version, highest seq wins.
+3. If owner disconnects, entity becomes neutral or reassigned.
 ```
 
-En petit test, cela peut fonctionner. Mais techniquement, ce n’est pas thread-safe.
+### Potential Bugs
 
-Solution possible :
-
-- ajouter un mutex ;
-- ou remplacer les threads par un `select()` / `poll()` / event loop.
+- [ ] split-brain ownership.
+- [ ] old owner continues sending updates.
+- [ ] peer crash leaves entity permanently locked.
+- [ ] simultaneous transfer creates inconsistent state.
 
 ---
 
-### BUG 10 — Pas de fermeture propre du proxy C
+## 17. Version 2 Tests
 
-Le proxy C boucle indéfiniment :
-
-```c
-while (1) {
-    sleep(1);
-}
-```
-
-Risque :
+### Test A — Ownership Request Accepted
 
 ```text
-Pas de fermeture propre des sockets.
-Pas de WSACleanup sous Windows.
+peer_1 owns army_1
+peer_2 requests army_1
+peer_1 sends OWNERSHIP_TRANSFER
+peer_2 becomes owner
+peer_1 stops updating army_1
 ```
 
-Solution possible :
+Expected:
 
-- gérer Ctrl+C ;
-- ajouter une variable `running` ;
-- fermer les sockets ;
-- appeler `WSACleanup()` sous Windows.
+- [ ] peer_2 owner table says `army_1 -> peer_2`.
+- [ ] peer_1 owner table says `army_1 -> peer_2`.
+- [ ] peer_3 also learns new owner if broadcast is implemented.
 
 ---
 
-### BUG 11 — Pas de validation JSON côté C
-
-Le proxy C forwarde les bytes sans vérifier :
-
-- si c’est du JSON ;
-- si le champ `type` existe ;
-- si le message est valide ;
-- si le message est trop grand ;
-- si la destination est autorisée.
-
-Risque :
+### Test B — Ownership Request Denied
 
 ```text
-N’importe quel paquet UDP reçu peut être transmis à Python.
+peer_2 requests army_1
+peer_1 denies
+peer_2 does not update army_1
 ```
 
-Solution possible :
+Expected:
 
-- ajouter un `protocol.c` ;
-- parser au minimum `type`, `dest`, `seq` ;
-- ignorer les messages invalides.
+- [ ] ownership unchanged.
+- [ ] requester logs denial.
+- [ ] no unauthorized STATE_UPDATE is applied.
 
 ---
 
-### BUG 12 — N’importe qui peut devenir le peer distant
-
-En mode serveur :
-
-```c
-remote_peer_addr = sender_addr;
-remote_peer_known = 1;
-```
-
-Risque :
+### Test C — Delayed Old Owner Update
 
 ```text
-Le premier paquet UDP reçu détermine le peer.
-Un paquet inconnu peut prendre la place attendue.
+peer_1 owns army_1
+peer_1 transfers army_1 to peer_2
+delayed STATE_UPDATE from peer_1 arrives after transfer
 ```
 
-Solution possible :
+Expected:
 
-- vérifier l’IP autorisée ;
-- ajouter un message `HELLO` avec token/session id ;
-- demander une configuration explicite du peer.
+- [ ] delayed update is ignored.
+- [ ] peer_2 remains owner.
+- [ ] entity state is not overwritten.
 
 ---
 
-### BUG 13 — Risque de fragmentation UDP
-
-Python autorise jusqu’à :
-
-```python
-recvfrom(65535)
-```
-
-Mais en pratique, un datagramme supérieur à environ 1400 octets peut être fragmenté.
-
-Risque :
+### Test D — Three-Peer Ownership Consistency
 
 ```text
-Perte de paquets plus fréquente.
-JSON incomplet.
-Erreur JSONDecodeError.
+peer_1 owns army_1
+peer_2 owns army_2
+peer_3 observes
+
+peer_2 requests army_1
+peer_1 transfers army_1 to peer_2
+peer_3 receives ownership update
 ```
 
-Solution possible :
+Expected:
 
-- garder les messages sous 1400 octets ;
-- compresser ou découper les gros messages ;
-- éviter d’envoyer tout l’état du jeu trop souvent.
+- [ ] all peers agree on owner of army_1.
+- [ ] only peer_2 sends authoritative updates for army_1.
+- [ ] no duplicate owner exists.
 
 ---
 
-### BUG 14 — Le filtre `seq` est global par type, pas par peer
+# Version 2 Final Validation
 
-Dans Python :
+Mark complete only if all are true:
 
-```python
-self._seq_in[msg_type] = seq
-```
+- [ ] ownership request implemented.
+- [ ] ownership transfer implemented.
+- [ ] ownership denied implemented.
+- [ ] ownership return implemented, if required.
+- [ ] each entity has owner.
+- [ ] stale ownership messages ignored.
+- [ ] non-owner state updates rejected or ignored.
+- [ ] ownership table consistent across 3 peers.
+- [ ] disconnect ownership policy documented.
+- [ ] conflict handling policy documented.
 
-Risque avec plusieurs peers :
-
-```text
-Si peer A envoie SYNC_UPDATE seq=10,
-puis peer B envoie SYNC_UPDATE seq=1,
-le message de peer B peut être ignoré.
-```
-
-Solution possible :
-
-Stocker par peer et par type :
-
-```python
-self._seq_in[(peer_id, msg_type)] = seq
-```
-
-Pour V1 avec un seul peer, ce bug est moins grave.
-
----
-
-### BUG 15 — `seq` local peut entrer en conflit entre machines
-
-Chaque machine commence avec :
-
-```python
-self._seq_out = 0
-```
-
-Risque :
+Result:
 
 ```text
-Deux peers peuvent envoyer les mêmes numéros de séquence.
-```
-
-Solution possible :
-
-- associer `seq` à un `sender_id` ;
-- filtrer par `(sender_id, type)` ;
-- ne pas utiliser `seq` globalement.
-
----
-
-### BUG 16 — Le proxy C est lancé automatiquement mais le chemin est fragile
-
-Dans Python :
-
-```python
-proxy_path = os.path.join("network", "proxy_udp.exe")
-if not os.path.exists(proxy_path):
-    proxy_path = "proxy_udp.exe"
-```
-
-Risque :
-
-```text
-Si le script est lancé depuis un autre dossier, le proxy C n’est pas trouvé.
-```
-
-Solution possible :
-
-Utiliser le chemin absolu basé sur `__file__` :
-
-```python
-base_dir = os.path.dirname(os.path.abspath(__file__))
-proxy_path = os.path.join(base_dir, "proxy_udp.exe")
+[ ] Version 2 complete
+[ ] Version 2 incomplete
 ```
 
 ---
 
-### BUG 17 — `CREATE_NEW_CONSOLE` est Windows-only mais correctement protégé
+# Global Known Limitations
 
-Code :
+These limitations are acceptable if documented:
 
-```python
-creationflags=subprocess.CREATE_NEW_CONSOLE if os.name == 'nt' else 0
-```
+- UDP can lose packets.
+- UDP can reorder packets.
+- UDP can duplicate packets.
+- UDP packets above MTU may fragment.
+- no NAT traversal.
+- no encryption.
+- no authentication.
+- no Byzantine fault tolerance.
+- no guaranteed global consistency.
 
-Ce point est acceptable. Mais attention : sous Linux/macOS, il faut probablement compiler `proxy_udp` sans `.exe`.
+---
 
-Risque :
+# Final Project Audit Summary
+
+## Version 1
 
 ```text
-Le code cherche seulement proxy_udp.exe.
+[ ] Complete
+[ ] Incomplete
 ```
 
-Solution possible :
+Main missing points:
 
-```python
-proxy_name = "proxy_udp.exe" if os.name == "nt" else "proxy_udp"
+```text
+-
+-
+-
+```
+
+Main bugs found:
+
+```text
+-
+-
+-
 ```
 
 ---
 
-### BUG 18 — `disconnect()` termine brutalement le proxy C
-
-Dans Python :
-
-```python
-self.proxy_process.terminate()
-```
-
-Risque :
+## Version 2
 
 ```text
-Le proxy C n’a pas le temps de fermer proprement ses sockets.
+[ ] Complete
+[ ] Incomplete
 ```
 
-Solution possible :
-
-- envoyer un message de shutdown au proxy ;
-- attendre avec `wait(timeout=...)` ;
-- forcer seulement si nécessaire.
-
----
-
-### BUG 19 — Pas d’accusé de réception
-
-UDP ne garantit pas :
-
-- la livraison ;
-- l’ordre ;
-- l’absence de duplication.
-
-Le code actuel filtre certains paquets obsolètes, mais ne confirme jamais la réception.
-
-Risque :
+Main missing points:
 
 ```text
-Un message important peut être perdu sans que l’application le sache.
+-
+-
+-
 ```
 
-Solution possible :
-
-- ajouter des messages `ACK` ;
-- retransmettre les messages critiques ;
-- réserver UDP brut aux updates fréquentes non critiques.
-
----
-
-### BUG 20 — Pas de distinction claire entre messages fiables et non fiables
-
-Actuellement, tous les messages passent par le même canal UDP.
-
-Risque :
+Main bugs found:
 
 ```text
-Un message critique comme JOIN, START_GAME, PLAYER_DEAD peut être perdu.
-```
-
-Solution possible :
-
-Créer deux catégories :
-
-```text
-Messages non critiques : SYNC_UPDATE, POSITION_UPDATE
-Messages critiques : JOIN, LEAVE, ATTACK, GAME_OVER, ACK requis
+-
+-
+-
 ```
 
 ---
 
-## 6. Tests minimum à exécuter
+# Recommended Final Decision
 
-### Test 1 — Python parle au proxy C
-
-Objectif : vérifier IPC localhost.
-
-Étapes :
-
-1. Lancer le proxy C.
-2. Lancer Python `NetworkBridge.connect()`.
-3. Vérifier que le proxy affiche :
+Use this section before submission:
 
 ```text
-[IPC] Client Python attaché sur le port XXXXX
+Version 1 is considered complete if:
+- Python ↔ C IPC works
+- C ↔ C UDP works
+- multi-peer routing works
+- STATE_UPDATE synchronization works
+- sequence filtering works
+
+Version 2 is considered complete if:
+- ownership exists
+- authority is enforced
+- stale ownership/state messages are ignored
+- 3 peers remain consistent after transfer
 ```
-
-Résultat attendu :
-
-```text
-Python est bien attaché au proxy C.
-```
-
----
-
-### Test 2 — Proxy client vers proxy serveur
-
-Machine A, serveur :
-
-```bash
-./proxy_udp server 5000 6000 6000
-```
-
-Machine B, client :
-
-```bash
-./proxy_udp <IP_MACHINE_A> 5000 6000 6000
-```
-
-Résultat attendu :
-
-```text
-Le client connaît immédiatement le serveur.
-Le serveur découvre le client après réception du premier paquet LAN.
-```
-
----
-
-### Test 3 — Python A vers Python B
-
-Objectif : vérifier le chemin complet.
-
-```text
-Python A -> Proxy C A -> Proxy C B -> Python B
-```
-
-Résultat attendu côté Python B :
-
-```text
-get_updates() retourne le message envoyé par Python A.
-```
-
----
-
-### Test 4 — Python B vers Python A
-
-Objectif : vérifier le chemin retour.
-
-```text
-Python B -> Proxy C B -> Proxy C A -> Python A
-```
-
-Résultat attendu côté Python A :
-
-```text
-get_updates() retourne le message envoyé par Python B.
-```
-
----
-
-### Test 5 — Message JSON invalide
-
-Envoyer un paquet non JSON vers le proxy ou vers Python.
-
-Résultat attendu :
-
-```text
-NetworkBridge ignore le paquet et ne crash pas.
-```
-
----
-
-### Test 6 — Gros message
-
-Envoyer un payload supérieur à 1400 octets.
-
-Résultat attendu :
-
-```text
-NetworkBridge affiche un warning MTU.
-Le projet doit décider si ce cas est autorisé ou non.
-```
-
----
-
-### Test 7 — Réordonnancement `SYNC_UPDATE`
-
-Envoyer :
-
-```text
-SYNC_UPDATE seq=2
-SYNC_UPDATE seq=1
-```
-
-Résultat attendu :
-
-```text
-seq=2 accepté.
-seq=1 ignoré.
-```
-
----
-
-## 7. Critères d’acceptation V1
-
-La version V1 peut être considérée acceptable si :
-
-- [ ] Python peut envoyer un JSON au proxy C.
-- [ ] Le proxy C peut forwarder ce JSON au proxy distant.
-- [ ] Le proxy distant peut forwarder ce JSON au Python distant.
-- [ ] Le chemin inverse fonctionne aussi.
-- [ ] Les ports sont configurables.
-- [ ] Le programme fonctionne sur au moins deux machines du même LAN.
-- [ ] Les erreurs JSON côté Python ne crashent pas le programme.
-- [ ] Les messages trop grands sont au moins détectés.
-- [ ] Le rôle de l’IPC est clairement expliqué dans le rapport.
-- [ ] Les limites de V1 sont documentées.
-
----
-
-## 8. Limites acceptables pour une V1 simple
-
-Ces limites peuvent être acceptables si elles sont clairement expliquées :
-
-- un seul peer supporté ;
-- pas de vraie fiabilité UDP ;
-- pas d’ACK ;
-- pas de retransmission ;
-- pas de routage multi-peer ;
-- proxy C qui ne parse pas encore le JSON ;
-- découverte simple du peer par premier paquet reçu.
-
-Mais ces limites doivent être indiquées dans le rapport comme limites de V1.
-
----
-
-## 9. Améliorations prioritaires recommandées
-
-### Priorité 1 — Corriger les problèmes bloquants
-
-- [ ] Corriger le champ `size` côté Python.
-- [ ] Ne pas considérer `_sender_ip = 127.0.0.1` comme l’IP réelle du peer.
-- [ ] Ajouter des logs d’erreur pour `sendto()` côté C.
-- [ ] Réinitialiser `sender_len` à chaque `recvfrom()`.
-- [ ] Clarifier le mode serveur/client et le premier paquet `HELLO`.
-
-### Priorité 2 — Rendre le projet plus propre
-
-- [ ] Ajouter un petit protocole : `HELLO`, `DATA`, `ACK`, `ERROR`.
-- [ ] Ajouter un `peer_id` ou `sender_id` dans les messages.
-- [ ] Stocker les numéros de séquence par peer.
-- [ ] Ajouter un fichier `protocol.c` si le C doit comprendre le JSON.
-- [ ] Ajouter un fichier `peer_manager.c` si plusieurs peers sont nécessaires.
-
-### Priorité 3 — Préparer une version plus avancée
-
-- [ ] Gestion multi-peer.
-- [ ] Heartbeat / timeout.
-- [ ] ACK pour messages critiques.
-- [ ] Reconnexion propre.
-- [ ] Fermeture propre du proxy C.
-- [ ] Tests automatisés.
-
----
-
-## 10. Conclusion
-
-L’implémentation actuelle est cohérente pour une V1 de type relais UDP simple :
-
-```text
-Python <-> Proxy C <-> Peer
-```
-
-Cependant, elle ne doit pas être présentée comme une architecture réseau complète. Elle doit être décrite comme :
-
-```text
-Un proxy UDP minimal qui relaie les datagrammes entre Python local et un peer réseau.
-```
-
-Les principaux points faibles actuels sont :
-
-1. un seul peer supporté ;
-2. pas de routage basé sur `dest` ;
-3. pas de parsing JSON côté C ;
-4. pas de fiabilité UDP ;
-5. champ `size` incorrect ;
-6. `_sender_ip` trompeur côté Python ;
-7. découverte de peer fragile ;
-8. absence de vraie fermeture propre.
-
-Pour la V1, cela peut suffire si les tests démontrent clairement que le chemin complet fonctionne dans les deux sens.
- 
----
-
-## 11. Test local 3 joueurs
-
-Objectif : verifier rapidement que 3 instances online peuvent tourner sur la meme machine.
-
-Commande depuis la racine du projet :
-
-```bash
-python network/test_three_players.py
-```
-
-Resultat attendu :
-
-```text
-[CHECK] player1_host: OK
-[CHECK] player2_join: OK
-[CHECK] player3_join: OK
-[RESULT] OK: les 3 joueurs voient chacun 2 armees distantes.
-```
-
-Ce test lance :
-
-- 1 host sur `py_port=5000`, `lan_port=6000` ;
-- 1 joiner sur `py_port=5001`, `lan_port=6001`, `remote_port=6000` ;
-- 1 joiner sur `py_port=5002`, `lan_port=6002`, `remote_port=6000`.
-
-Pour tester avec l'affichage Pygame, lancer les 3 commandes online manuellement dans 3 terminaux et ajouter `--pygame`.

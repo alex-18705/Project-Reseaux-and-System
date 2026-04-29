@@ -101,11 +101,23 @@ int ipc_recv_from_python(AppContext *ctx, char *buffer, size_t buffer_size) {
 }
 
 int ipc_send_to_python(AppContext *ctx, const char *msg, size_t len) {
+    size_t sent_total = 0;
     if (!ctx || ctx->python_fd == INVALID_FD || !msg || len == 0) {
         return -1;
     }
-    return send(ctx->python_fd, msg, (int)len, 0);
+    while(sent_total < len){
+        int sent = send(ctx->python_fd, msg + sent_total, (int)(len - sent_total), 0);
+
+        if (sent <= 0){
+            return -1;
+        }
+
+        sent_total += (size_t)sent;
+    }
+
+    return (int)sent_total;
 }
+
 
 void ipc_close_socket(socket_t fd) {
     if (fd == INVALID_FD) {

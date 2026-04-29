@@ -5,6 +5,9 @@
 #define PEER_ID_SIZE 64
 #define JSON_SIZE 65535
 
+#define TYPE_PING "PING"
+#define TYPE_PONG "PONG"
+
 #define TYPE_JOIN "JOIN"
 #define TYPE_BROADCAST "BROADCAST"
 #define TYPE_SEND_TO "SEND_TO"
@@ -19,6 +22,8 @@
 
 typedef enum {
     MSG_UNKNOWN = 0,
+    MSG_PING,
+    MSG_PONG,
     MSG_JOIN,
     MSG_BROADCAST,
     MSG_SEND_TO,
