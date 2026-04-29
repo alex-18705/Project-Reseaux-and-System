@@ -271,6 +271,14 @@ class Army:
                 y1 + h1 <= y2 or  # rect1 au-dessus de rect2
                 y1 >= y2 + h2  # rect1 en dessous de rect2
         )
+
+    def deepcopy_unit(self):
+        new_army = Army()
+        new_army.gameMode = self.gameMode
+        new_army.general = self.general
+        new_army.units = [u.copy() for u in self.units]
+        return new_army
+
     """
 
 =======
