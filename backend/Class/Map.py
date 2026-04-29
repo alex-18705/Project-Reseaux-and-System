@@ -13,7 +13,7 @@ class Map:
         self.obstacles.add(obstacle)
 
 
-    def fussionner(self, map : Map):
+    def fussionner(self, map):
         for new_obstacle in map.obstacles:
             valid = True
             for obstacle in self.obstacles:
