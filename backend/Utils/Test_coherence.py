@@ -61,4 +61,4 @@ class Test_coherence:
 
     def print_report(self,report):
         for element in report:
-            print("Suspicious "+ element["type"] +" from " + element["unit"])
+            print("Suspicious "+ element["type"] +" from ", element["unit"])
