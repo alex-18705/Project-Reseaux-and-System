@@ -3,6 +3,7 @@ import json
 import os
 import uuid
 from pathlib import Path
+import time
 
 from backend.Class.Army import Army
 from backend.GameModes.GameMode import GameMode
@@ -43,6 +44,7 @@ class Online(GameMode):
         
         # Map to display the IP of each player in the UI
         self.peer_ips = {self.my_id: self.network_bridge._my_ip}
+        self.last_recv_time = {}
         
         # Initialize ownership system
         initialize_ownership(self.my_id)
@@ -195,6 +197,7 @@ class Online(GameMode):
                     ownership.register_peer(army_id)
                     if sender_ip:
                         self.peer_ips[army_id] = sender_ip
+                    self.last_recv_time[army_id] = time.time()
                     try:
                         army = json_to_army(army_data)
                         self._mark_army_owner(army, army_id)
@@ -249,6 +252,15 @@ class Online(GameMode):
         self.current_sender_id = self.my_id # We are the executor for our own units
         self.my_army.fight(self.map, otherArmy=all_enemies)
         self.update_dead(all_enemies)
+        
+        # ---- AI Takeover pour les joueurs déconnectés ----
+        current_time = time.time()
+        for army_id, army in self.othersArmy.items():
+            if army_id in self.last_recv_time:
+                if current_time - self.last_recv_time[army_id] > 5.0:
+                    # Le joueur s'est déconnecté. On simule son armée via l'IA contre NOUS.
+                    self.current_sender_id = army_id
+                    army.fight(self.map, otherArmy=self.my_army)
         
         # Incrémenter le tick
         self.tick += 1
