@@ -18,17 +18,20 @@ import queue
 #     is_connected et sortir proprement sans WinError 10038.
 # ============================================================
 
+from network.security_manager import SecurityManager
+
 # Types de messages dont l'ordre est critique :
 # si un paquet plus récent est arrivé avant, l'ancien est ignoré.
 _TYPES_SEQUENCES = {"SYNC_UPDATE"}
 
 
 class NetworkBridge:
-    def __init__(self, host='127.0.0.1', port=5000):
+    def __init__(self, host='127.0.0.1', port=5000, security_enabled=True):
         self.host = host
         self.port = port
         self.sock = None
         self.is_connected = False
+        self.security_manager = SecurityManager() if security_enabled else None
 
         # File d'attente thread-safe
         # Sépare le thread réseau de la boucle principale du jeu
@@ -78,7 +81,7 @@ class NetworkBridge:
             if remote_ip:
                 args.append(remote_ip)
             else:
-                args.append("server")
+                args.append("peer")
             
             # Use provided ports
             args.append(str(self.port))      # py_port
@@ -142,6 +145,19 @@ class NetworkBridge:
                 seq      = msg.get("seq", -1)
                 sender_key = self._sender_key_from_message(msg)
 
+                # ---- Security Decryption & Verification ----
+                if self.security_manager and msg_type not in ["SECURE_HELLO", "SECURE_KEY_EXCHANGE"]:
+                    payload = msg.get("payload")
+                    if isinstance(payload, dict) and "ciphertext" in payload:
+                        # Find peer_id (sender_key might be the ID if already known)
+                        peer_id = sender_key
+                        decrypted_payload, error = self.security_manager.decrypt_and_verify(peer_id, payload)
+                        if decrypted_payload:
+                            msg["payload"] = decrypted_payload
+                        else:
+                            print(f"[NetworkBridge] Security Error from {peer_id}: {error}")
+                            continue
+
                 # ---- Filtre de réordonnancement ----
                 # Pour les types sensibles à l'ordre (ex: SYNC_UPDATE),
                 # on ignore tout paquet dont le seq est inférieur ou égal
@@ -174,7 +190,7 @@ class NetworkBridge:
         print("[NetworkBridge] Thread de réception arrêté.")
 
     # ---- Envoi de messages ----
-    def send_message(self, msg_type, destination, payload_dict=None):
+    def send_message(self, msg_type, destination, payload_dict=None, peer_id=None):
         """
         Envoie un message JSON vers le Proxy C en UDP.
 
@@ -199,6 +215,16 @@ class NetworkBridge:
 
         # Horodatage par numéro de séquence
         self._seq_out += 1
+
+        # ---- Security Encryption & Signing ----
+        if self.security_manager and msg_type not in ["SECURE_HELLO", "SECURE_KEY_EXCHANGE"] and peer_id:
+            secure_payload = self.security_manager.sign_and_encrypt(peer_id, payload_dict)
+            if secure_payload:
+                payload_dict = secure_payload
+            else:
+                # If we have a peer_id but no session key, we might need to handshake first
+                if peer_id in self.security_manager.peer_public_keys:
+                    print(f"[NetworkBridge] Warning: No session key for {peer_id}, sending unencrypted.")
 
         message = {
             "size": len(payload_dict),

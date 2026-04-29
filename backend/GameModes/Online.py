@@ -130,7 +130,7 @@ class Online(GameMode):
                 self.network_bridge.send_message("OWNERSHIP_REQUEST", ip, {
                     "unit_id": unit_id,
                     "requester_id": self.my_id
-                })
+                }, peer_id=current_owner)
 
     def message_receive(self):
         """
@@ -140,15 +140,49 @@ class Online(GameMode):
         messages = self.network_bridge.get_updates()
         updated = False
         ownership = get_ownership_manager()
+        security = self.network_bridge.security_manager
 
         for msg in messages:
             sender_ip = msg.get("_sender_ip")
+            msg_type = msg.get("type", "SYNC_UPDATE")
+            payload = msg.get("payload", {})
+            
             if sender_ip and sender_ip not in self.know_ip:
                 print(f"[Online] Nouveau pair decouvert : {sender_ip}")
                 self.know_ip.add(sender_ip)
+                # Initiate handshake
+                if security:
+                    self.network_bridge.send_message("SECURE_HELLO", sender_ip, {
+                        "public_key": security.get_my_public_key_pem(),
+                        "peer_id": self.my_id
+                    })
 
-            msg_type = msg.get("type", "SYNC_UPDATE")
-            payload = msg.get("payload", {})
+            if msg_type == "SECURE_HELLO":
+                peer_public_key = payload.get("public_key")
+                peer_id = payload.get("peer_id")
+                if peer_id and peer_public_key:
+                    print(f"[Security] Received HELLO from {peer_id}")
+                    security.register_peer(peer_id, peer_public_key)
+                    # Respond with our key if they haven't seen it, and send session key
+                    encrypted_session_key = security.create_session_key(peer_id)
+                    self.network_bridge.send_message("SECURE_KEY_EXCHANGE", sender_ip, {
+                        "encrypted_key": encrypted_session_key,
+                        "peer_id": self.my_id,
+                        "public_key": security.get_my_public_key_pem() # Include our key just in case
+                    })
+                continue
+            
+            if msg_type == "SECURE_KEY_EXCHANGE":
+                peer_id = payload.get("peer_id")
+                encrypted_key = payload.get("encrypted_key")
+                peer_public_key = payload.get("public_key")
+                if peer_id and encrypted_key:
+                    if peer_public_key:
+                        security.register_peer(peer_id, peer_public_key)
+                    print(f"[Security] Received Session Key from {peer_id}")
+                    security.handle_session_key(peer_id, encrypted_key)
+                continue
+
             if not isinstance(payload, dict):
                 continue
                 
@@ -256,7 +290,14 @@ class Online(GameMode):
         payload = self.create_payload()
         # Broadcast to all known IPs
         for ip in self.know_ip:
-            self.network_bridge.send_message("SYNC_UPDATE", ip, payload)
+            security = self.network_bridge.security_manager
+            if security and security.peer_session_keys:
+                # Send encrypted message to each peer we have a session with
+                for peer_id in security.peer_session_keys:
+                    self.network_bridge.send_message("SYNC_UPDATE", ip, payload, peer_id=peer_id)
+            else:
+                # Fallback to unencrypted if no session key yet (handshake period)
+                self.network_bridge.send_message("SYNC_UPDATE", ip, payload)
 
     def update_dead(self, all_enemies):
         for army in self.othersArmy.values():
