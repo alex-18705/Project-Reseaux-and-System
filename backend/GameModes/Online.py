@@ -238,7 +238,9 @@ class Online(GameMode):
             ownership.assign_ownership(unit.id, self.my_id)
 
         # Exécuter la logique de combat pour NOS unités
-        all_enemies = self.flat()
+        # We need to fight AGAINST everyone else combined
+        all_enemies = self.flat() 
+        
         self.current_sender_id = self.my_id # We are the executor for our own units
         self.my_army.fight(self.map, otherArmy=all_enemies)
         self.update_dead(all_enemies)

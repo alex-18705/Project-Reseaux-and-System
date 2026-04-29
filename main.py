@@ -10,6 +10,24 @@ from frontend.Terminal import Screen
 from frontend.Terminal.NoAffiche import NoAffiche
 
 
+import socket
+
+def is_port_in_use(port):
+    with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as s:
+        try:
+            s.bind(("127.0.0.1", port))
+            return False
+        except socket.error:
+            return True
+
+def find_available_ports(start_py=5000, start_lan=6000):
+    py_port = start_py
+    lan_port = start_lan
+    while is_port_in_use(py_port) or is_port_in_use(lan_port):
+        py_port += 1
+        lan_port += 1
+    return py_port, lan_port
+
 def main():
     parser = argparse.ArgumentParser(description="MedievAIl Battle Simulator")
     subparsers = parser.add_subparsers(dest="mode")
@@ -79,16 +97,16 @@ def main():
         help="--join <ip>"
     )
     run_parser.add_argument(
-        "--py_port", type=int, default=5000,
-        help="Local port for Python-Proxy communication"
+        "--py_port", type=int, default=None,
+        help="Local port for Python-Proxy communication (auto-detected if omitted)"
     )
     run_parser.add_argument(
-        "--lan_port", type=int, default=6000,
-        help="Local port for LAN communication"
+        "--lan_port", type=int, default=None,
+        help="Local port for LAN communication (auto-detected if omitted)"
     )
     run_parser.add_argument(
         "--remote_port", type=int, default=6000,
-        help="Target port on the remote machine"
+        help="Target port on the remote machine (default: 6000)"
     )
     run_parser.add_argument(
         "--ticks", "-t", type=int, default=None,
@@ -114,11 +132,18 @@ def main():
 
     # ==================== MODE:  ONLINE ====================
     if args.mode == "online":
+        # Automatic port allocation if not provided
+        py_port = args.py_port
+        lan_port = args.lan_port
+        if py_port is None or lan_port is None:
+            py_port, lan_port = find_available_ports(py_port or 5000, lan_port or 6000)
+            print(f"[Online] Auto-allocation : py_port={py_port}, lan_port={lan_port}")
+
         # If args.join is None, we are the host (Blue)
         is_first = args.join is None
         gameMode = Online(
-            py_port=args.py_port,
-            lan_port=args.lan_port,
+            py_port=py_port,
+            lan_port=lan_port,
             remote_port=args.remote_port,
             is_first=is_first,
             spawn_slot=args.spawn_slot

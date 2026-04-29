@@ -75,23 +75,25 @@ https://drive.google.com/file/d/1T1PBgwUbtoPRrT4uYkOi8iOA9RJ1wf_O/view?usp=drive
 
 ### Mode multi-pairs (P2P) & Ownership Manager
 
-Ce projet supporte désormais le jeu en multi-pairs (plus de 2 joueurs) et utilise un **Ownership Manager** pour garantir que chaque client ne gère que ses propres unités tout en restant synchronisé avec les autres.
+Ce projet supporte désormais le jeu en multi-pairs (plus de 2 joueurs) et utilise un **Ownership Manager** pour garantir la cohérence.
 
-#### Comment tester localement (1 Host + n Clients)
+#### Comment tester localement (Simplifié)
+
+Grâce à l'allocation automatique des ports, vous n'avez plus besoin de spécifier les ports manuellement pour tester sur une même machine.
 
 **Terminal 1 (Host - Créateur)**
 ```powershell
-python main.py online --create --general MajorDaft --army_file army/two.army --map_file map/superflat.map --pygame --py_port 5000 --lan_port 6000 --remote_port 6000
+python main.py online --create --general MajorDaft --army_file army/two.army --map_file map/superflat.map --pygame
 ```
 
 **Terminal 2 (Client 1)**
 ```powershell
-python main.py online --join 127.0.0.1 --general MajorDaft --army_file army/two.army --map_file map/superflat.map --pygame --py_port 5001 --lan_port 6001 --remote_port 6000
+python main.py online --join 127.0.0.1 --general MajorDaft --army_file army/two.army --map_file map/superflat.map --pygame
 ```
 
 **Terminal 3 (Client 2)**
 ```powershell
-python main.py online --join 127.0.0.1 --general MajorDaft --army_file army/two.army --map_file map/superflat.map --pygame --py_port 5002 --lan_port 6002 --remote_port 6000
+python main.py online --join 127.0.0.1 --general MajorDaft --army_file army/two.army --map_file map/superflat.map --pygame
 ```
 
 #### Ownership Manager
