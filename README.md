@@ -98,7 +98,8 @@ python main.py online --join 127.0.0.1 --general MajorDaft --army_file army/two.
 
 ---
 
-#### Comment tester via Internet (vraie IP / VPN) — `proxy_udp_real_ip`
+#### Comment tester via Internet (vraie IP / VPN) — `proxy_udp_real_ip` gcc -o network/proxy_udp_real_ip.exe network/proxy_udp_real_ip.c -lws2_32
+
 
 Le proxy `proxy_udp_real_ip.exe` gère automatiquement la traversée NAT (UDP hole-punching).
 
