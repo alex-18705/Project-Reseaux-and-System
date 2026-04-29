@@ -173,9 +173,10 @@ def main():
 
         gameMode.affichage = affichage
 
-        choice = input("Do you want to save this battle? (y/N): ")
-        if choice.lower().startswith("y"):
-            gameMode.isSave = True
+        # Skip blocking save prompt for online mode to allow immediate connection
+        # choice = input("Do you want to save this battle? (y/N): ")
+        # if choice.lower().startswith("y"):
+        #    gameMode.isSave = True
 
         gameMode.launch()
         gameMode.gameLoop()
