@@ -329,7 +329,7 @@ class Online(GameMode):
         # Incrémenter le tick
         self.tick += 1
 
-        self.Test_coherence.test_coherence(self.my_army, self.othersArmy)
+        self.Test_coherence.set_armies(self.my_army, self.othersArmy)
         self._broadcast_state()
 
     def _broadcast_state(self):
