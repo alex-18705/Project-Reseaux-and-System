@@ -45,6 +45,7 @@ class Online(GameMode):
         
         # Map to display the IP of each player in the UI
         self.peer_ips = {self.my_id: self.network_bridge._my_ip}
+        self.peer_slots = {self.my_id: self.spawn_slot}
         self.last_recv_time = {}
         
         # Initialize ownership system
@@ -216,6 +217,16 @@ class Online(GameMode):
                 if peer_id != self.my_id and peer_ip:
                     self.peer_ips[peer_id] = peer_ip
 
+            raw_peer_slots = payload.get("peer_slots", {})
+            peer_slots_payload = raw_peer_slots if isinstance(raw_peer_slots, dict) else {}
+            for peer_id, slot in peer_slots_payload.items():
+                if peer_id == self.my_id:
+                    continue
+                try:
+                    self.peer_slots[peer_id] = int(slot)
+                except (TypeError, ValueError):
+                    pass
+
             if msg_type == "OWNERSHIP_REQUEST":
                 unit_id = payload.get("unit_id")
                 requester_id = payload.get("requester_id")
@@ -258,6 +269,11 @@ class Online(GameMode):
                         self.peer_ips[army_id] = peer_ips_payload[army_id]
                     elif sender_id == army_id and sender_ip:
                         self.peer_ips[army_id] = sender_ip
+                    if army_id in peer_slots_payload:
+                        try:
+                            self.peer_slots[army_id] = int(peer_slots_payload[army_id])
+                        except (TypeError, ValueError):
+                            pass
                     self.last_recv_time[army_id] = time.time()
                     try:
                         army = json_to_army(army_data)
@@ -402,7 +418,8 @@ class Online(GameMode):
             "armies": {
                 self.my_id: army_to_dict(self.my_army)
             },
-            "peer_ips": self.peer_ips
+            "peer_ips": self.peer_ips,
+            "peer_slots": self.peer_slots
         }
 
         result = []
@@ -412,7 +429,8 @@ class Online(GameMode):
         for army_id, army_obj in self.othersArmy.items():
             result.append({
                 "armies": {army_id: army_to_dict(army_obj)},
-                "peer_ips": self.peer_ips
+                "peer_ips": self.peer_ips,
+                "peer_slots": self.peer_slots
             })
 
         # Only host (is_first) decides the map to avoid conflicts
