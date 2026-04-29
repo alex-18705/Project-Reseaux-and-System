@@ -95,65 +95,10 @@ class Army:
                         if unit.cooldown <= 0:
                             actions.append(Action(unit, "attack", target))
                 else:
-                    vector = (dx / (dist2 ** 0.5) * unit.speed,dy / (dist2 ** 0.5) * unit.speed)
-                    #print(vector)
-                    """
-                    if self.try_collision(unit,map,vector,otherArmy):
-                        vector1 = vector[0] * cos(1) - vector[1] * sin(1), vector[0] * sin(1) + vector[1] * cos(1)
-                        #print(vector1)
-                        if self.try_collision(unit,map,vector1,otherArmy) :
-                            vector2 = vector[0] * cos(-1) - vector[1] * sin(-1), vector[0] * sin(-1) + vector[1] * cos(-1)
-                            #print(vector2)
-                            if self.try_collision(unit,map, vector2,otherArmy):
-                                vector = None
-                            else :
-                                vector = vector2
-                        else :
-                            vector = vector1
-                    """
-                    collision, vector = self.test_vector(unit, map, vector, otherArmy, 4)
-                    if not collision :
-                        vector = vector[0] +ux, vector[1]+uy
-                        actions.append(
-                            Action(unit, "move", vector)
-                        )
+                    actions.append(
+                        Action(unit, "move", (dx,dy,dist2,ux,uy,map))
+                    )
         return actions
-
-    def test_vector(self,unit,map,vector, otherArmy, profondeur):
-        assert profondeur >=0
-        collision, find_vector = True, vector
-        if profondeur > 0:
-            collision, find_vector = self.test_vector(unit,map,vector, otherArmy, profondeur-1)
-        if not collision : return collision, find_vector
-        find_vector = vector[0] * cos(profondeur*0.5) - vector[1] * sin(profondeur*0.5), vector[0] * sin(profondeur*0.5) + vector[1] * cos(profondeur*0.5)
-        collision = self.try_collision(unit,map,find_vector,otherArmy)
-        if not collision: return collision, find_vector
-        find_vector = vector[0] * cos(-1*profondeur*0.5) - vector[1] * sin(-1*profondeur*0.5), vector[0] * sin(-1*profondeur*0.5) + vector[1] * cos(-1*profondeur*0.5)
-        return self.try_collision(unit,map,find_vector,otherArmy), find_vector
-
-    def try_collision(self,unit,map,vector, otherArmy):
-        collisionE, collisionA, collisionO = False, False, False
-        for allie in self.living_units():
-            if allie != unit:
-                collisionA = self.test_collision(vector, unit, allie)
-                if collisionA:
-                    # print(unit,allie,vector,unit.position, allie.position)
-                    break
-        if not isinstance(unit, Elephant) :
-            for enemie in otherArmy.living_units():
-                collisionE = self.test_collision(vector, unit, enemie)
-                if collisionE:
-                # print(unit, enemie,vector, unit.position, enemie.position)
-                    break
-        for obstacle in map.obstacles:
-            collisionO = self.test_collision(vector, unit, obstacle)
-            if collisionO: break
-        collision = collisionE or collisionA or collisionO
-
-        return collision
-
-
-
 
     def execOrder(self, orders: Action, otherArmy: "Army"):
         from backend.Utils.network_ownership import get_ownership_manager, OwnershipStatus
@@ -176,23 +121,23 @@ class Army:
             pass
 
         for action in orders:
-            unit : Unit = action.unit
-            
+            unit: Unit = action.unit
+
             # VALIDATION CHECK
             if ownership and self.gameMode and hasattr(self.gameMode, "current_sender_id"):
                 status = ownership.validate_action(
-                    {"unit_id": unit.id}, 
+                    {"unit_id": unit.id},
                     self.gameMode.current_sender_id
                 )
                 if status != OwnershipStatus.AUTHORIZED:
                     if getattr(self.gameMode, "verbose", False):
-                        print(f"[Ownership] Action REJECTED for Unit {unit.id}: Peer {self.gameMode.current_sender_id} is not the owner.")
+                        print(
+                            f"[Ownership] Action REJECTED for Unit {unit.id}: Peer {self.gameMode.current_sender_id} is not the owner.")
                     continue
 
             target: Unit = action.target
             # ATTAQUE
             if action.kind == "attack":
-
 
                 bonus = 0
                 for classe in target.classes:
@@ -226,25 +171,29 @@ class Army:
 
             # DÉPLACEMENT
             elif action.kind == "move":
-                new_pos = action.target
-                # Clamp position to map bounds if map has dimensions
-                if unit.army and unit.army.gameMode and unit.army.gameMode.map:
-                    game_map = unit.army.gameMode.map
-                    if hasattr(game_map, 'width') and hasattr(game_map, 'height'):
-                        new_x = max(0, min(new_pos[0], game_map.width - 1))
-                        new_y = max(0, min(new_pos[1], game_map.height - 1))
-                        unit.position = (new_x, new_y)
+                dx, dy, dist2, ux, uy, map = action.target
+                vector = (dx / (dist2 ** 0.5) * unit.speed, dy / (dist2 ** 0.5) * unit.speed)
+                collision, vector = self.test_vector(unit, map, vector, otherArmy, 4)
+                if not collision:
+                    new_pos = vector[0] + ux, vector[1] + uy
+                    # Clamp position to map bounds if map has dimensions
+                    if unit.army and unit.army.gameMode and unit.army.gameMode.map:
+                        game_map = unit.army.gameMode.map
+                        if hasattr(game_map, 'width') and hasattr(game_map, 'height'):
+                            new_x = max(0, min(new_pos[0], game_map.width - 1))
+                            new_y = max(0, min(new_pos[1], game_map.height - 1))
+                            unit.position = (new_x, new_y)
+                        else:
+                            unit.position = new_pos
                     else:
                         unit.position = new_pos
-                else:
-                    unit.position = new_pos
-            #Monk healing
-            elif action.kind == "heal" :
-                target.hp = min(target.max_hp, target.hp+unit.attack)
+            # Monk healing
+            elif action.kind == "heal":
+                target.hp = min(target.max_hp, target.hp + unit.attack)
                 unit.last_attacked_id = "heal"
-            #Monk convert
+            # Monk convert
             elif action.kind == "conversion":
-                if target in otherArmy.living_units() :
+                if target in otherArmy.living_units():
                     otherArmy.remove_unit(target)
                     self.add_unit(target)
                     unit.cooldown = unit.reload_time
@@ -252,10 +201,45 @@ class Army:
                     target.last_attacked_id = None
                     unit.last_attacked_id = "conversion"
 
-            if isinstance(unit, Elephant) :
+            if isinstance(unit, Elephant):
                 for enemy in otherArmy.living_units():
-                    if (unit.position[0]-enemy.position[0])**2 + (unit.position[1]-enemy.position[1])**2 <= 0.25**2 :
-                        enemy.hp-=unit.attack
+                    if (unit.position[0] - enemy.position[0]) ** 2 + (
+                            unit.position[1] - enemy.position[1]) ** 2 <= 0.25 ** 2:
+                        enemy.hp -= unit.attack
+
+
+    def test_vector(self,unit,map,vector, otherArmy, profondeur):
+        assert profondeur >=0
+        collision, find_vector = True, vector
+        if profondeur > 0:
+            collision, find_vector = self.test_vector(unit,map,vector, otherArmy, profondeur-1)
+        if not collision : return collision, find_vector
+        find_vector = vector[0] * cos(profondeur*0.5) - vector[1] * sin(profondeur*0.5), vector[0] * sin(profondeur*0.5) + vector[1] * cos(profondeur*0.5)
+        collision = self.try_collision(unit,map,find_vector,otherArmy)
+        if not collision: return collision, find_vector
+        find_vector = vector[0] * cos(-1*profondeur*0.5) - vector[1] * sin(-1*profondeur*0.5), vector[0] * sin(-1*profondeur*0.5) + vector[1] * cos(-1*profondeur*0.5)
+        return self.try_collision(unit,map,find_vector,otherArmy), find_vector
+
+    def try_collision(self,unit,map,vector, otherArmy):
+        collisionE, collisionA, collisionO = False, False, False
+        for allie in self.living_units():
+            if allie != unit:
+                collisionA = self.test_collision(vector, unit, allie)
+                if collisionA:
+                    # print(unit,allie,vector,unit.position, allie.position)
+                    break
+        if not isinstance(unit, Elephant) :
+            for enemie in otherArmy.living_units():
+                collisionE = self.test_collision(vector, unit, enemie)
+                if collisionE:
+                # print(unit, enemie,vector, unit.position, enemie.position)
+                    break
+        for obstacle in map.obstacles:
+            collisionO = self.test_collision(vector, unit, obstacle)
+            if collisionO: break
+        collision = collisionE or collisionA or collisionO
+
+        return collision
 
     def fight(self, map: Map, otherArmy):
 

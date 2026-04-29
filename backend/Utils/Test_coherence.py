@@ -27,7 +27,7 @@ class Test_coherence:
         for unit in new_army.units:
             #collision
 
-            
+
 
 
 
