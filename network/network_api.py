@@ -45,6 +45,24 @@ class NetworkBridge:
         # (seuls les types dans _TYPES_SEQUENCES sont filtrés)
         self._seq_in = {}
 
+        # Our own public/LAN IP — embedded in every outgoing packet
+        # so that the remote peer can discover our address even though
+        # ALL packets arrive locally from 127.0.0.1 (proxy loopback).
+        self._my_ip = self._detect_my_ip()
+
+    @staticmethod
+    def _detect_my_ip():
+        """Best-effort detection of the machine's outbound IP address."""
+        import socket as _sock
+        try:
+            s = _sock.socket(_sock.AF_INET, _sock.SOCK_DGRAM)
+            s.connect(("8.8.8.8", 80))        # doesn't actually send anything
+            ip = s.getsockname()[0]
+            s.close()
+            return ip
+        except Exception:
+            return "127.0.0.1"
+
     def _sender_key_from_message(self, msg):
         payload = msg.get("payload", {})
         if isinstance(payload, dict):
@@ -90,9 +108,9 @@ class NetworkBridge:
         except Exception as e:
             print(f"[NetworkBridge] Warning: Could not start Proxy C automatically: {e}")
 
-        # Give Proxy C a moment to bind to its ports
+        # Give Proxy C a moment to bind to its ports and punch through NAT
         import time
-        time.sleep(0.5)
+        time.sleep(1.0)
 
         self.sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
         # Timeout de 1 s : le thread peut vérifier is_connected périodiquement
@@ -103,6 +121,7 @@ class NetworkBridge:
         # Premier paquet pour que le Proxy C enregistre notre port éphémère
         self.sock.sendto(b"\n", self.server_addr)
 
+        print(f"[NetworkBridge] Mon IP détectée : {self._my_ip}")
         print("[NetworkBridge] Prêt en UDP ! (Proxy C sur port {})".format(self.port))
 
         # Lancer le thread de réception en arrière-plan (daemon = stoppe avec le jeu)
@@ -130,8 +149,14 @@ class NetworkBridge:
 
                 try:
                     msg = json.loads(ligne)
-                    # Include sender IP for peer discovery
-                    msg["_sender_ip"] = addr[0]
+                    # The proxy always forwards from 127.0.0.1, so addr[0]
+                    # is useless for peer discovery.  Instead we read the
+                    # "dep" field that the sender embedded in the packet.
+                    dep = msg.get("dep")
+                    if dep and dep != "127.0.0.1":
+                        msg["_sender_ip"] = dep
+                    else:
+                        msg["_sender_ip"] = addr[0]   # fallback (LAN / same machine)
                 except json.JSONDecodeError:
                     # Paquet corrompu ou tronqué (fragmentation UDP) → ignorer
                     print(f"[NetworkBridge] Erreur JSON ignorée "
@@ -203,9 +228,9 @@ class NetworkBridge:
         message = {
             "size": len(payload_dict),
             "dest": destination,
-            "dep": None , #recuperer l'ip de la machine
-            "seq":     self._seq_out,
-            "type":    msg_type,
+            "dep":  self._my_ip,   # our real IP so the remote side can add us to know_ip
+            "seq":  self._seq_out,
+            "type": msg_type,
             "payload": payload_dict
         }
 

@@ -77,7 +77,7 @@ https://drive.google.com/file/d/1T1PBgwUbtoPRrT4uYkOi8iOA9RJ1wf_O/view?usp=drive
 
 Ce projet supporte désormais le jeu en multi-pairs (plus de 2 joueurs) et utilise un **Ownership Manager** pour garantir la cohérence.
 
-#### Comment tester localement (Simplifié)
+#### Comment tester localement (même machine / LAN)
 
 Grâce à l'allocation automatique des ports, vous n'avez plus besoin de spécifier les ports manuellement pour tester sur une même machine.
 
@@ -95,6 +95,32 @@ python main.py online --join 127.0.0.1 --general MajorDaft --army_file army/two.
 ```powershell
 python main.py online --join 127.0.0.1 --general MajorDaft --army_file army/two.army --map_file map/superflat.map --pygame
 ```
+
+---
+
+#### Comment tester via Internet (vraie IP / VPN) — `proxy_udp_real_ip`
+
+Le proxy `proxy_udp_real_ip.exe` gère automatiquement la traversée NAT (UDP hole-punching).
+
+> **Prérequis** : Le port **6000 UDP** doit être ouvert / forwardé sur le routeur du host, **OU** les deux machines doivent être sur le même VPN.
+
+**Machine A — Host (attend la connexion)**
+```powershell
+python main.py online --create --general MajorDaft --army_file army/two.army --map_file map/superflat.map --pygame
+```
+Le proxy affichera `[LAN] Waiting for discovery` et votre IP locale. Communiquez votre IP publique (ou VPN) au joueur B.
+
+**Machine B — Joiner (connaît l'IP du host)**
+```powershell
+python main.py online --join <IP_DU_HOST> --general MajorDaft --army_file army/two.army --map_file map/superflat.map --pygame
+```
+Remplacez `<IP_DU_HOST>` par l'IP publique (ou VPN) de la machine A.
+
+**Ce qui se passe automatiquement :**
+1. Le proxy du Joiner envoie des paquets `HELLO` toutes les 2 secondes vers le Host pour ouvrir le NAT.
+2. Le proxy du Host détecte le premier paquet entrant et enregistre l'IP/port du Joiner.
+3. Une fois les deux proxies synchronisés, les paquets de jeu s'échangent normalement.
+4. La console affichera `-> [LAN] Peer discovered:` suivi de l'IP distante.
 
 #### Ownership Manager
 L'Ownership Manager (`backend/Utils/network_ownership.py`) assure que :
