@@ -1,6 +1,5 @@
 from backend.Class.Army import Army
-from backend.GameModes.GameMode import GameMode
-from backend.GameModes.Online import Online
+
 
 
 class Test_coherence:
@@ -12,7 +11,7 @@ class Test_coherence:
 
 
 
-    def test_coherence(self,gamemode : Online, map):
+    def test_coherence(self,gamemode, map):
         report=[]
         if self.MY_ARMY and gamemode.my_army :
             report.extend(self.compare_army(self.MY_ARMY, gamemode.my_army,map, gamemode.flat()))
