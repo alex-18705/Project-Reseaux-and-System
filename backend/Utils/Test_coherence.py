@@ -20,7 +20,7 @@ class Test_coherence:
         for k in gamemode.othersArmy.keys():
             if self.OTHER_ARMY and self.OTHER_ARMY.get(k,None) and gamemode.othersArmy.get(k,None) :
                 other_list = gamemode.othersArmy.copy()
-                other_list.remove(k)
+                del other_list[k]
                 other_list["0"] = gamemode.my_army
 
                 otherArmy = Army()
