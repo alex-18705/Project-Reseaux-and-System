@@ -11,7 +11,7 @@ class Test_coherence:
 
 
 
-    def test_coherence(self,gamemode, map):
+    def test_coherence(self,gamemode):
         report=[]
         if self.MY_ARMY and gamemode.my_army :
             report.extend(self.compare_army(self.MY_ARMY, gamemode.my_army,map, gamemode.flat()))
@@ -27,7 +27,7 @@ class Test_coherence:
                     all_units.extend(other_list[army_id].units)
                 otherArmy.units = all_units
 
-                report.extend(self.compare_army(self.OTHER_ARMY[k], gamemode.other_army[k],map, otherArmy))
+                report.extend(self.compare_army(self.OTHER_ARMY[k], gamemode.other_army[k],gamemode.map, otherArmy))
 
         self.print_report(report)
 
@@ -58,4 +58,5 @@ class Test_coherence:
         return report
 
     def print_report(self,report):
-        pass
+        for element in report:
+            print("Suspicious "+ element["type"] +" from " + element["unit"])

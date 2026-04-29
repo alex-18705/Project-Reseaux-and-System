@@ -306,6 +306,9 @@ class Online(GameMode):
         for unit in self.my_army.units:
             ownership.assign_ownership(unit.id, self.my_id)
 
+
+        report =self.Test_coherence.test_coherence(self)
+        self.Test_coherence.print_report(report)
         # Exécuter la logique de combat pour NOS unités
         # We need to fight AGAINST everyone else combined
         all_enemies = self.flat() 
@@ -325,7 +328,8 @@ class Online(GameMode):
         
         # Incrémenter le tick
         self.tick += 1
-        
+
+        self.Test_coherence.test_coherence(self.my_army, self.othersArmy)
         self._broadcast_state()
 
     def _broadcast_state(self):
