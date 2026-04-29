@@ -41,6 +41,9 @@ class Online(GameMode):
         self.has_started = False
         self.current_sender_id = None
         
+        # Map to display the IP of each player in the UI
+        self.peer_ips = {self.my_id: self.network_bridge._my_ip}
+        
         # Initialize ownership system
         initialize_ownership(self.my_id)
         
@@ -190,6 +193,8 @@ class Online(GameMode):
                 if army_id != self.my_id:
                     self.current_sender_id = army_id
                     ownership.register_peer(army_id)
+                    if sender_ip:
+                        self.peer_ips[army_id] = sender_ip
                     try:
                         army = json_to_army(army_data)
                         self._mark_army_owner(army, army_id)

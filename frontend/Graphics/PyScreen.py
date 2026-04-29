@@ -563,7 +563,13 @@ class PyScreen(Affichage):
             if owner_id == local_owner and army1.general:
                 general_name = f" ({type(army1.general).__name__})"
 
-            header = self.font.render(f"Army {index}{general_name}: {len(units)} units", True, color)
+            ip_suffix = ""
+            if hasattr(self.battle_instance, 'peer_ips'):
+                ip = self.battle_instance.peer_ips.get(owner_id)
+                if ip:
+                    ip_suffix = f" [{ip}]"
+
+            header = self.font.render(f"Army {index}{general_name}{ip_suffix}: {len(units)} units", True, color)
             self.screen.blit(header, (panel_x + 5, current_y))
             current_y += line_height
 
