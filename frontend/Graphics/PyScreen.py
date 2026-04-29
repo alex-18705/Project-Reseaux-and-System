@@ -29,6 +29,10 @@ class PyScreen(Affichage):
 
         self.offset_x, self.offset_y = 0, 0
         self.zoom_factor = 20
+        self.min_zoom = 1.5
+        self.max_zoom = 80
+        self.dragging_camera = False
+        self.last_mouse_pos = None
         self.unit_scale_multiplier = 4.5  # Multiplier to make units bigger and more visible
 
         # Paramètres de la vue isométrique
@@ -79,14 +83,34 @@ class PyScreen(Affichage):
         self.font = pygame.font.Font(None, 24)
         self.small_font = pygame.font.Font(None, 18)
 
-        actual_tile_size = int(self.tile_size * self.zoom_factor) + 4
+        self._refresh_tile_cache()
+
+    def _refresh_tile_cache(self):
+        actual_tile_size = max(4, int(self.tile_size * self.zoom_factor) + 4)
         base_tile = pygame.transform.scale(self.TILE_IMAGE, (actual_tile_size, actual_tile_size))
-        
+
         self.TILE_LIGHT = base_tile.copy()
         self.TILE_LIGHT.fill((60, 180, 40), special_flags=pygame.BLEND_RGB_MULT)
-        
+
         self.TILE_DARK = base_tile.copy()
         self.TILE_DARK.fill((45, 150, 30), special_flags=pygame.BLEND_RGB_MULT)
+
+    def _set_zoom(self, new_zoom, mouse_pos=None):
+        old_zoom = self.zoom_factor
+        new_zoom = max(self.min_zoom, min(self.max_zoom, new_zoom))
+        if abs(new_zoom - old_zoom) < 0.001:
+            return
+
+        if mouse_pos is not None:
+            mx, my = mouse_pos
+            world_screen_x = mx - self.WIDTH // 2 - self.offset_x
+            world_screen_y = my - self.HEIGHT // 4 - self.offset_y
+            scale = new_zoom / old_zoom
+            self.offset_x = mx - self.WIDTH // 2 - world_screen_x * scale
+            self.offset_y = my - self.HEIGHT // 4 - world_screen_y * scale
+
+        self.zoom_factor = new_zoom
+        self._refresh_tile_cache()
 
     def _get_interpolated_position(self, unit):
         """Get the interpolated position for smooth movement animation."""
@@ -208,6 +232,17 @@ class PyScreen(Affichage):
             # Draw HP bar above unit
             self._draw_hp_bar(unit, iso_x, iso_y, unit_size)
 
+    def _get_display_armies(self, army1, army2):
+        game_mode = getattr(self, "gameMode", None)
+        if game_mode is not None and hasattr(game_mode, "get_display_armies"):
+            armies = game_mode.get_display_armies()
+            if armies:
+                return armies
+        return [
+            {"id": "Army 1", "army": army1, "color": (255, 50, 50)},
+            {"id": "Army 2", "army": army2, "color": (50, 100, 255)},
+        ]
+
     def afficher(self, map: Map, army1: Army, army2: Army):
         # Handle input for camera movement and zoom
         input_result = self.handle_input()
@@ -217,6 +252,7 @@ class PyScreen(Affichage):
             return "LOAD"  # Signal to load
 
         self.screen.fill((0, 0, 0))
+        display_armies = self._get_display_armies(army1, army2)
         x_max, x_min, y_max, y_min = Affichage.get_sizeMap(map, army1, army2)
         # print(x_max, x_min, y_max, y_min)  # Debug output - commented out
 
@@ -240,24 +276,23 @@ class PyScreen(Affichage):
 
         # Mise à jour de l'écran
 
-        # Draw army1 units with blue border/indicator
-        for unit in army1.living_units():
-            self._draw_unit(unit, (50, 100, 255))  # Blue for army1
-
-        # Draw army2 units with red border/indicator
-        for unit in army2.living_units():
-            self._draw_unit(unit, (255, 50, 50))  # Red for army2
+        for entry in display_armies:
+            army = entry["army"]
+            if army is None:
+                continue
+            for unit in army.living_units():
+                self._draw_unit(unit, entry["color"])
 
         for unit in map.obstacles:
             self._draw_unit(unit, None)
 
         # Draw minimap if enabled
         if self.show_minimap:
-            self._draw_minimap(map, army1, army2)
+            self._draw_minimap(map, army1, army2, display_armies)
 
         # Draw army visualization if enabled
         if self.show_army_stats:
-            self._draw_army_stats(army1, army2)
+            self._draw_army_stats(army1, army2, display_armies)
 
         # Draw pause indicator if paused
         if self.is_paused_state:
@@ -311,6 +346,31 @@ class PyScreen(Affichage):
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
                 return "QUIT"  # Signal to quit
+            elif event.type == pygame.MOUSEBUTTONDOWN:
+                if event.button in (2, 3):
+                    self.dragging_camera = True
+                    self.last_mouse_pos = event.pos
+                elif event.button == 4:
+                    self._set_zoom(self.zoom_factor * 1.12, event.pos)
+                elif event.button == 5:
+                    self._set_zoom(self.zoom_factor / 1.12, event.pos)
+            elif event.type == pygame.MOUSEBUTTONUP:
+                if event.button in (2, 3):
+                    self.dragging_camera = False
+                    self.last_mouse_pos = None
+            elif event.type == pygame.MOUSEMOTION:
+                if self.dragging_camera and self.last_mouse_pos is not None:
+                    dx = event.pos[0] - self.last_mouse_pos[0]
+                    dy = event.pos[1] - self.last_mouse_pos[1]
+                    self.offset_x += dx
+                    self.offset_y += dy
+                    self.last_mouse_pos = event.pos
+            elif event.type == pygame.MOUSEWHEEL:
+                mouse_pos = pygame.mouse.get_pos()
+                if event.y > 0:
+                    self._set_zoom(self.zoom_factor * (1.12 ** event.y), mouse_pos)
+                elif event.y < 0:
+                    self._set_zoom(self.zoom_factor / (1.12 ** abs(event.y)), mouse_pos)
             elif event.type == pygame.KEYDOWN:
                 if event.key == pygame.K_ESCAPE:
                     if self.show_load_menu:
@@ -400,12 +460,12 @@ class PyScreen(Affichage):
 
         if keys[pygame.K_c]:
             self.offset_x, self.offset_y = 0, 0
-            self.zoom_factor = 3
+            self._set_zoom(20)
 
         if keys[pygame.K_1]:
-            self.zoom_factor *= 1.05
+            self._set_zoom(self.zoom_factor * 1.05, pygame.mouse.get_pos())
         if keys[pygame.K_2]:
-            self.zoom_factor /= 1.05
+            self._set_zoom(self.zoom_factor / 1.05, pygame.mouse.get_pos())
 
         return True
 
@@ -418,7 +478,7 @@ class PyScreen(Affichage):
         iso_y = ((x + y) * scaled_tile_size // 4 + self.HEIGHT // 4 + self.offset_y)
         return (iso_x, iso_y)
 
-    def _draw_minimap(self, map: Map, army1: Army, army2: Army):
+    def _draw_minimap(self, map: Map, army1: Army, army2: Army, display_armies=None):
         """Draw a minimap in the top-right corner showing the entire map."""
         minimap_x, minimap_y = self.minimap_position
         minimap_surface = pygame.Surface((self.minimap_size, self.minimap_size))
@@ -445,22 +505,20 @@ class PyScreen(Affichage):
                 pygame.draw.rect(minimap_surface, (50, 150, 50),
                                  (minimap_x_pos, minimap_y_pos, int(scale_x) + 1, int(scale_y) + 1))
 
-        # Draw units on minimap
-        for unit in army1.living_units():
-            if unit.position is not None:
-                x, y = unit.position
-                minimap_x_pos = int(x * scale_x)
-                minimap_y_pos = int(y * scale_y)
-                pygame.draw.circle(minimap_surface, (50, 100, 255),
-                                   (minimap_x_pos, minimap_y_pos), 2)
+        if display_armies is None:
+            display_armies = self._get_display_armies(army1, army2)
 
-        for unit in army2.living_units():
-            if unit.position is not None:
-                x, y = unit.position
-                minimap_x_pos = int(x * scale_x)
-                minimap_y_pos = int(y * scale_y)
-                pygame.draw.circle(minimap_surface, (255, 50, 50),
-                                   (minimap_x_pos, minimap_y_pos), 2)
+        for entry in display_armies:
+            army = entry["army"]
+            if army is None:
+                continue
+            for unit in army.living_units():
+                if unit.position is not None:
+                    x, y = unit.position
+                    minimap_x_pos = int(x * scale_x)
+                    minimap_y_pos = int(y * scale_y)
+                    pygame.draw.circle(minimap_surface, entry["color"],
+                                       (minimap_x_pos, minimap_y_pos), 2)
 
         # Draw border
         pygame.draw.rect(minimap_surface, (255, 255, 255),
@@ -473,16 +531,19 @@ class PyScreen(Affichage):
         label = self.small_font.render("Minimap (M)", True, (255, 255, 255))
         self.screen.blit(label, (minimap_x, minimap_y - 20))
 
-    def _draw_army_stats(self, army1: Army, army2: Army):
+    def _draw_army_stats(self, army1: Army, army2: Army, display_armies=None):
         """Draw army statistics panel showing unit counts and types."""
         panel_x = 10
         panel_y = 10
-        panel_width = 300
+        panel_width = 340
         line_height = 25
         current_y = panel_y
+        if display_armies is None:
+            display_armies = self._get_display_armies(army1, army2)
+        panel_height = max(180, min(620, 80 + len(display_armies) * 95))
 
         # Background panel
-        panel_surface = pygame.Surface((panel_width, 400))
+        panel_surface = pygame.Surface((panel_width, panel_height))
         panel_surface.set_alpha(200)
         panel_surface.fill((20, 20, 20))
         self.screen.blit(panel_surface, (panel_x, panel_y))
@@ -492,75 +553,44 @@ class PyScreen(Affichage):
         self.screen.blit(title, (panel_x + 5, current_y))
         current_y += line_height + 5
 
-        # Army 1 stats
-        if self.show_army1_details:
-            army1_units = army1.living_units()
-            army1_count = len(army1_units)
-
-            header1 = self.font.render(f"Army 1 ({type(army1.general).__name__}): {army1_count} units", True, (50, 100, 255))
-            self.screen.blit(header1, (panel_x + 5, current_y))
+        for index, entry in enumerate(display_armies, start=1):
+            army = entry["army"]
+            if army is None:
+                continue
+            units = army.living_units()
+            label = entry["id"]
+            if len(label) > 18:
+                label = label[:15] + "..."
+            general_name = type(army.general).__name__ if army.general else "Unknown"
+            header = self.font.render(
+                f"{index}. {label} ({general_name}): {len(units)} units",
+                True,
+                entry["color"]
+            )
+            self.screen.blit(header, (panel_x + 5, current_y))
             current_y += line_height
 
             if self.show_unit_counts:
-                # Count by unit type
-                knights = sum(1 for u in army1_units if isinstance(u, Knight))
-                pikemen = sum(1 for u in army1_units if isinstance(u, Pikeman))
-                crossbowmen = sum(1 for u in army1_units if isinstance(u, Crossbowman))
+                counts = [
+                    ("Knights", sum(1 for u in units if isinstance(u, Knight))),
+                    ("Pikemen", sum(1 for u in units if isinstance(u, Pikeman))),
+                    ("Crossbowmen", sum(1 for u in units if isinstance(u, Crossbowman))),
+                    ("Monks", sum(1 for u in units if isinstance(u, Monk))),
+                    ("Elephants", sum(1 for u in units if isinstance(u, Elephant))),
+                    ("Castles", sum(1 for u in units if isinstance(u, Castle))),
+                ]
+                count_text = ", ".join(f"{name}: {count}" for name, count in counts if count > 0)
+                if not count_text:
+                    count_text = "No living units"
+                text = self.small_font.render(f"  {count_text}", True, (200, 200, 200))
+                self.screen.blit(text, (panel_x + 5, current_y))
+                current_y += line_height - 5
 
-                if knights > 0:
-                    text = self.small_font.render(f"  Knights: {knights}", True, (200, 200, 200))
-                    self.screen.blit(text, (panel_x + 5, current_y))
-                    current_y += line_height - 5
-                if pikemen > 0:
-                    text = self.small_font.render(f"  Pikemen: {pikemen}", True, (200, 200, 200))
-                    self.screen.blit(text, (panel_x + 5, current_y))
-                    current_y += line_height - 5
-                if crossbowmen > 0:
-                    text = self.small_font.render(f"  Crossbowmen: {crossbowmen}", True, (200, 200, 200))
-                    self.screen.blit(text, (panel_x + 5, current_y))
-                    current_y += line_height - 5
-            current_y += 5
-        else:
-            text = self.small_font.render("Army 1: (Press F2)", True, (150, 150, 150))
-            self.screen.blit(text, (panel_x + 5, current_y))
-            current_y += line_height
-
-        # Separator
-        pygame.draw.line(self.screen, (100, 100, 100),
-                         (panel_x + 5, current_y), (panel_x + panel_width - 5, current_y))
-        current_y += line_height
-
-        # Army 2 stats
-        if self.show_army2_details:
-            army2_units = army2.living_units()
-            army2_count = len(army2_units)
-
-            header2 = self.font.render(f"Army 2 ({type(army2.general).__name__}): {army2_count} units", True, (255, 50, 50))
-            self.screen.blit(header2, (panel_x + 5, current_y))
-            current_y += line_height
-
-            if self.show_unit_counts:
-                # Count by unit type
-                knights = sum(1 for u in army2_units if isinstance(u, Knight))
-                pikemen = sum(1 for u in army2_units if isinstance(u, Pikeman))
-                crossbowmen = sum(1 for u in army2_units if isinstance(u, Crossbowman))
-
-                if knights > 0:
-                    text = self.small_font.render(f"  Knights: {knights}", True, (200, 200, 200))
-                    self.screen.blit(text, (panel_x + 5, current_y))
-                    current_y += line_height - 5
-                if pikemen > 0:
-                    text = self.small_font.render(f"  Pikemen: {pikemen}", True, (200, 200, 200))
-                    self.screen.blit(text, (panel_x + 5, current_y))
-                    current_y += line_height - 5
-                if crossbowmen > 0:
-                    text = self.small_font.render(f"  Crossbowmen: {crossbowmen}", True, (200, 200, 200))
-                    self.screen.blit(text, (panel_x + 5, current_y))
-                    current_y += line_height - 5
-        else:
-            text = self.small_font.render("Army 2: (Press F3)", True, (150, 150, 150))
-            self.screen.blit(text, (panel_x + 5, current_y))
-            current_y += line_height
+            current_y += 8
+            if index < len(display_armies):
+                pygame.draw.line(self.screen, (100, 100, 100),
+                                 (panel_x + 5, current_y), (panel_x + panel_width - 5, current_y))
+                current_y += 8
 
         # Help text
         current_y += 10
@@ -568,8 +598,6 @@ class PyScreen(Affichage):
             "Controls:",
             "M - Toggle Minimap",
             "F1 - Toggle All Stats",
-            "F2 - Toggle Army 1",
-            "F3 - Toggle Army 2",
             "F4 - Toggle Unit Counts",
             "F11 - Quick Save",
             "F12 - Quick Load",

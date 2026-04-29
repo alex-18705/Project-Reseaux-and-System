@@ -6,7 +6,11 @@
 #ifdef _WIN32
 #include <winsock2.h>
 #include <ws2tcpip.h>
+#include <mstcpip.h>
 #define CLOSESOCKET closesocket
+#ifndef SIO_UDP_CONNRESET
+#define SIO_UDP_CONNRESET _WSAIOW(IOC_VENDOR, 12)
+#endif
 #else
 #include <unistd.h>
 #include <arpa/inet.h>
@@ -27,6 +31,23 @@ socket_t udp_create_socket(const char *bind_ip, int port) {
         perror("socket");
         return (int)INVALID_FD;
     }
+#ifdef _WIN32
+    {
+        BOOL udp_connreset = FALSE;
+        DWORD bytes_returned = 0;
+        WSAIoctl(
+            udp_fd,
+            SIO_UDP_CONNRESET,
+            &udp_connreset,
+            sizeof(udp_connreset),
+            NULL,
+            0,
+            &bytes_returned,
+            NULL,
+            NULL
+        );
+    }
+#endif
     if (setsockopt(udp_fd, SOL_SOCKET, SO_REUSEADDR, (const char *)&opt, sizeof(opt)) < 0) {
         perror("setsockopt");
         udp_close_socket(udp_fd);

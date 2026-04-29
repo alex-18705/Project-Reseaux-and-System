@@ -19,7 +19,7 @@ from network.network_api import NetworkBridge
 
 class Online(GameMode):
 
-    def __init__(self):
+    def __init__(self, peer_id=None, py_port=5000):
         super().__init__()
         self.max_tick = None
         self.tick = 0
@@ -28,15 +28,23 @@ class Online(GameMode):
         self.verbose = True
         self.my_army = None
         self.othersArmy = {} # {"id" : "army"}
-        self.network_bridge = NetworkBridge()
+        self.my_id = peer_id or str(uuid.uuid4())
+        self.network_bridge = NetworkBridge(peer_id=self.my_id, port=py_port)
         self.know_ip= set()
-        self.my_id = str(uuid.uuid4())
+        self._last_status_tick = -1
+        self.army_colors = [
+            (255, 50, 50),
+            (50, 100, 255),
+            (60, 200, 90),
+            (240, 210, 60),
+            (190, 90, 255),
+            (255, 140, 60),
+        ]
 
     def flat(self):
         new = Army()
         list_units = []
         for k in self.othersArmy.keys():
-            new.general = self.othersArmy[k].general
             new.gameMode = self.othersArmy[k].gameMode
             list_units.append(self.othersArmy[k].units)
         new.units = [u for sublist in list_units for u in sublist]
@@ -44,8 +52,22 @@ class Online(GameMode):
 
     def update_army(self,global_army):
         for k in self.othersArmy.keys():
-            for u in self.othersArmy[k].units:
+            for u in list(self.othersArmy[k].units):
                 if u not in global_army.units: self.othersArmy[k].units.remove(u)
+
+    def get_display_armies(self):
+        armies = [(self.my_id, self.my_army)]
+        for peer_id in sorted(self.othersArmy.keys()):
+            armies.append((peer_id, self.othersArmy[peer_id]))
+
+        display_armies = []
+        for index, (peer_id, army) in enumerate(armies):
+            display_armies.append({
+                "id": peer_id,
+                "army": army,
+                "color": self.army_colors[index % len(self.army_colors)],
+            })
+        return display_armies
 
     def continue_condition(self):
         return True
@@ -58,30 +80,57 @@ class Online(GameMode):
         return False
 
     def run(self):
-        """
-        messages = self.network_bridge.get_updates()
-        for message in messages:
+        self.network_bridge.apply_updates(self)
 
-            #get ip, ajouter dans know_ip si deja pas présente
-            #
-            pass
-        """
-        print("reponse : ")
-        message = input()
+        all_enemy_army = self.flat()
+        if not all_enemy_army.living_units():
+            if self.tick != self._last_status_tick and self.tick % 30 == 0:
+                print(f"[Online] {self.my_id}: waiting for remote army...")
+                self._last_status_tick = self.tick
+            self.network_bridge.send_state_update(self.create_state_payload())
+            self.tick += 1
+            return
 
-        self.load_payload(message)
-        all = self.flat()
-        self.my_army.fight(self.map, otherArmy=all)
-        self.update_army(all)
-        response = self.create_payload()
+        for remote_army in self.othersArmy.values():
+            if remote_army.general is not None:
+                remote_army.fight(self.map, otherArmy=self.my_army)
 
-        print(response)
+        self.my_army.fight(self.map, otherArmy=all_enemy_army)
+        self.update_army(all_enemy_army)
 
+        self.network_bridge.send_state_update(self.create_state_payload())
 
+        self.tick += 1
+
+    def apply_remote_state(self, state):
+        if not state:
+            return
+        peer_id = state.get("peer_id")
+        army_data = state.get("army")
+        if not peer_id or peer_id == self.my_id or not army_data:
+            return
+        if isinstance(army_data, str):
+            army = json_to_army(army_data)
+        else:
+            army = json_to_army(json.dumps(army_data))
+        army.gameMode = self
+        for unit in army.units:
+            unit.army = army
+        if peer_id not in self.othersArmy:
+            print(f"[Online] {self.my_id}: received remote army from {peer_id}")
+        self.othersArmy[peer_id] = army
+
+    def create_state_payload(self):
+        return {
+            "peer_id": self.my_id,
+            "tick": self.tick,
+            "army": army_to_dict(self.my_army)
+        }
 
     def launch(self):
         self.affichage.initialiser()
         self.network_bridge.connect()
+        self.network_bridge.join()
 
     def save(self):
         pass
@@ -114,10 +163,7 @@ class Online(GameMode):
 
     @property
     def army2(self):
-        try :
-            return self.othersArmy[self.othersArmy.keys()[0]]
-        except:
-            return Army()
+        return self.flat()
 
     @army2.setter
     def army2(self, value):

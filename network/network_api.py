@@ -1,196 +1,211 @@
-import socket
 import json
-import threading
 import queue
+import socket
+import threading
 
-# ============================================================
-#   NetworkBridge — Pont réseau Python ↔ Proxy C (UDP)
-#
-#   Fonctionnalités clés :
-#   - Numérotation de séquence : chaque paquet sortant estampillé
-#     "seq". Les paquets de type SYNC_UPDATE reçus hors ordre
-#     (seq ≤ dernier seq reçu) sont ignorés, évitant l'erreur
-#     de logique causée par le réordonnancement UDP.
-#   - JSON compact : separators=(',',':') supprime les espaces
-#     inutiles et minimise la taille du datagramme UDP pour
-#     rester sous la limite MTU de 1500 octets.
-#   - Socket timeout de 1 s : le thread peut vérifier
-#     is_connected et sortir proprement sans WinError 10038.
-# ============================================================
 
-# Types de messages dont l'ordre est critique :
-# si un paquet plus récent est arrivé avant, l'ancien est ignoré.
-_TYPES_SEQUENCES = {"SYNC_UPDATE"}
+SEQUENCED_TYPES = {"STATE_UPDATE"}
 
 
 class NetworkBridge:
-    def __init__(self, host='127.0.0.1', port=5000):
+    """
+    Bridge Python <-> proxy C.
+    IPC Python Layer
+    The C proxy listens on TCP localhost for Python, then forwards messages to
+    other proxies over UDP. Python only talks to this local TCP socket.
+    """
+
+    def __init__(self, peer_id, host="127.0.0.1", port=5000):
+        self.peer_id = peer_id
         self.host = host
         self.port = port
         self.sock = None
         self.is_connected = False
-
-        # File d'attente thread-safe
-        # Sépare le thread réseau de la boucle principale du jeu
         self.incoming_queue = queue.Queue()
         self.receive_thread = None
-
-        # Numéro de séquence sortant : incrémenté à chaque envoi
         self._seq_out = 0
-
-        # Dernier numéro de séquence reçu par type de message
-        # (seuls les types dans _TYPES_SEQUENCES sont filtrés)
         self._seq_in = {}
 
-    # ---- Connexion ----
     def connect(self):
-        #Demarrage du programme C
-
-        """Ouvre le socket UDP local et démarre le thread de réception."""
-        self.sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-        # Timeout de 1 s : le thread peut vérifier is_connected périodiquement
-        self.sock.settimeout(1.0)
-        self.server_addr = (self.host, self.port)
+        self.sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        self.sock.connect((self.host, self.port))
         self.is_connected = True
 
-        # Premier paquet pour que le Proxy C enregistre notre port éphémère
-        self.sock.sendto(b"\n", self.server_addr)
-
-        print("[NetworkBridge] Prêt en UDP ! (Proxy C sur port {})".format(self.port))
-
-        # Lancer le thread de réception en arrière-plan (daemon = stoppe avec le jeu)
         self.receive_thread = threading.Thread(target=self._listen_loop, daemon=True)
         self.receive_thread.start()
+
+        print(f"[NetworkBridge] Connected to C proxy at {self.host}:{self.port}")
         return True
 
-    # ---- Thread de réception ----
     def _listen_loop(self):
-        """
-        Thread en arrière-plan :
-        - Reçoit les datagrammes UDP depuis le Proxy C.
-        - Filtre les paquets obsolètes (numéro de séquence trop ancien).
-        - Place les messages valides dans la file d'attente.
-        """
+        buffer = ""
         while self.is_connected:
             try:
-                data, addr = self.sock.recvfrom(65535)
+                data = self.sock.recv(4096)
                 if not data:
-                    continue
+                    self.is_connected = False
+                    break
 
-                ligne = data.decode('utf-8').strip()
-                if not ligne:
-                    continue
+                buffer += data.decode("utf-8")
 
-                try:
-                    msg = json.loads(ligne)
-                except json.JSONDecodeError:
-                    # Paquet corrompu ou tronqué (fragmentation UDP) → ignorer
-                    print(f"[NetworkBridge] Erreur JSON ignorée "
-                          f"({len(ligne)} octets reçus)")
-                    continue
-
-                msg_type = msg.get("type")
-                seq      = msg.get("seq", -1)
-
-                # ---- Filtre de réordonnancement ----
-                # Pour les types sensibles à l'ordre (ex: SYNC_UPDATE),
-                # on ignore tout paquet dont le seq est inférieur ou égal
-                # au dernier seq reçu : c'est un paquet retardé.
-                if msg_type in _TYPES_SEQUENCES and seq != -1:
-                    dernier = self._seq_in.get(msg_type, -1)
-                    if seq <= dernier:
-                        # Paquet hors ordre → ignorer silencieusement
+                while "\n" in buffer:
+                    line, buffer = buffer.split("\n", 1)
+                    line = line.strip()
+                    if not line:
                         continue
-                    self._seq_in[msg_type] = seq
 
-                self.incoming_queue.put(msg)
+                    try:
+                        msg = json.loads(line)
+                    except json.JSONDecodeError:
+                        print(f"[NetworkBridge] Invalid JSON ignored: {line}")
+                        continue
 
-            except socket.timeout:
-                # Timeout normal : reboucler et vérifier is_connected
-                continue
+                    if self._is_new_message(msg):
+                        self.incoming_queue.put(msg)
+
             except OSError:
-                # Socket fermé par disconnect() → sortie propre
                 break
-            except Exception as e:
+            except Exception as exc:
                 if self.is_connected:
-                    print(f"[NetworkBridge] Erreur dans le thread de réception : {e}")
+                    print(f"[NetworkBridge] Receive error: {exc}")
                 break
 
-        print("[NetworkBridge] Thread de réception arrêté.")
+        self.is_connected = False
+        print("[NetworkBridge] Disconnected from C proxy")
 
-    # ---- Envoi de messages ----
-    def send_message(self, msg_type, destination, payload_dict=None):
-        """
-        Envoie un message JSON vers le Proxy C en UDP.
+    def _is_new_message(self, msg):
+        msg_type = msg.get("type")
+        payload = msg.get("payload", {})
+        seq = payload.get("seq")
 
-        Structure du datagramme :
-        {
-            "size": <taille en octets>
-            "dest" : <ip destination>
-            "dep" : <ip depart>
-            "seq":     <numéro de séquence entier croissant>,
-            "type":    <type du message>,
-            "payload": <données utiles>
-        }
+        if msg_type not in SEQUENCED_TYPES or seq is None:
+            return True
 
-        Le JSON est sérialisé sans espaces (separators=(',',':'))
-        pour minimiser la taille et rester sous le MTU de 1500 octets.
-        """
-        if not self.is_connected:
+        sender = msg.get("sender_id") or msg.get("sender_peer_id") or ""
+        key = (sender, msg_type)
+        last_seq = self._seq_in.get(key, -1)
+
+        if seq <= last_seq:
             return False
 
-        if payload_dict is None:
-            payload_dict = {}
+        self._seq_in[key] = seq
+        return True
 
-        # Horodatage par numéro de séquence
-        self._seq_out += 1
+    def send_message(self, msg_type, target_peer_id="", payload=None):
+        if not self.is_connected:
+            print("[NetworkBridge] Not connected")
+            return False
+
+        if payload is None:
+            payload = {}
 
         message = {
-            "size": len(payload_dict),
-            "dest": destination,
-            "dep": None , #recuperer l'ip de la machine
-            "seq":     self._seq_out,
-            "type":    msg_type,
-            "payload": payload_dict
+            "type": msg_type,
+            "sender_id": self.peer_id,
+            "target_peer_id": target_peer_id,
+            "payload": payload,
         }
 
         try:
-            # JSON compact : pas d'espaces → taille minimale
-            donnees = json.dumps(message, separators=(',', ':')) + '\n'
-            self.sock.sendto(donnees.encode('utf-8'), self.server_addr)
-
-            # Avertir si le datagramme dépasse le MTU standard (1500 octets)
-            taille = len(donnees.encode('utf-8'))
-            if taille > 1400:
-                print(f"[NetworkBridge] ATTENTION : datagramme volumineux "
-                      f"({taille} octets, MTU ≈ 1500). Risque de fragmentation !")
+            data = json.dumps(message, separators=(",", ":")) + "\n"
+            self.sock.sendall(data.encode("utf-8"))
             return True
-        except Exception as e:
-            print(f"[NetworkBridge] Erreur lors de l'envoi ({msg_type}) : {e}")
+        except Exception as exc:
+            print(f"[NetworkBridge] Send error: {exc}")
+            self.is_connected = False
             return False
 
-    # ---- Lecture non-bloquante ----
+    def join(self):
+        return self.send_message("JOIN", "", {"peer_id": self.peer_id})
+
+    def broadcast(self, event_type, data):
+        return self.send_message("BROADCAST", "", {
+            "event_type": event_type,
+            "data": data,
+        })
+
+    def send_to(self, target_peer_id, event_type, data):
+        return self.send_message("SEND_TO", target_peer_id, {
+            "event_type": event_type,
+            "data": data,
+        })
+
+    def send_state_update(self, state):
+        self._seq_out += 1
+        return self.send_message("STATE_UPDATE", "", {
+            "seq": self._seq_out,
+            "state": state,
+        })
+
+    def request_ownership(self, target_peer_id, entity_id):
+        return self.send_message("OWNERSHIP_REQUEST", target_peer_id, {
+            "entity_id": entity_id,
+        })
+
+    def transfer_ownership(self, target_peer_id, entity_id, entity_state):
+        return self.send_message("OWNERSHIP_TRANSFER", target_peer_id, {
+            "entity_id": entity_id,
+            "state": entity_state,
+        })
+
+    def deny_ownership(self, target_peer_id, entity_id, reason=""):
+        return self.send_message("OWNERSHIP_DENIED", target_peer_id, {
+            "entity_id": entity_id,
+            "reason": reason,
+        })
+
+    def return_ownership(self, target_peer_id, entity_id, entity_state):
+        return self.send_message("OWNERSHIP_RETURN", target_peer_id, {
+            "entity_id": entity_id,
+            "state": entity_state,
+        })
+
     def get_updates(self):
-        """
-        Retourne tous les messages disponibles dans la file,
-        sans bloquer la boucle de jeu principale.
-        """
         messages = []
         while not self.incoming_queue.empty():
             messages.append(self.incoming_queue.get())
         return messages
 
-    # ---- Déconnexion propre ----
+    def apply_updates(self, game):
+        for msg in self.get_updates():
+            self.apply_update(game, msg)
+
+    def apply_update(self, game, msg):
+        msg_type = msg.get("type")
+        payload = msg.get("payload", {})
+
+        if msg_type == "STATE_UPDATE":
+            state = payload.get("state", payload)
+            if hasattr(game, "apply_remote_state"):
+                game.apply_remote_state(state)
+            return
+
+        if msg_type in {"BROADCAST", "SEND_TO", "REMOTE_EVENT"}:
+            event_type = payload.get("event_type")
+            data = payload.get("data", payload)
+            if hasattr(game, "handle_remote_event"):
+                game.handle_remote_event(event_type, data, msg)
+            return
+
+        if msg_type == "OWNERSHIP_REQUEST" and hasattr(game, "handle_ownership_request"):
+            game.handle_ownership_request(msg)
+        elif msg_type == "OWNERSHIP_TRANSFER" and hasattr(game, "handle_ownership_transfer"):
+            game.handle_ownership_transfer(msg)
+        elif msg_type == "OWNERSHIP_DENIED" and hasattr(game, "handle_ownership_denied"):
+            game.handle_ownership_denied(msg)
+        elif msg_type == "OWNERSHIP_RETURN" and hasattr(game, "handle_ownership_return"):
+            game.handle_ownership_return(msg)
+
     def disconnect(self):
-        """
-        Ferme la connexion de façon sécurisée :
-        is_connected = False d'abord → le thread sort à son prochain
-        timeout → puis on ferme le socket (évite WinError 10038).
-        """
-        self.is_connected = False   # Signal au thread de s'arrêter
+        self.is_connected = False
+
         if self.sock:
             try:
+                self.sock.shutdown(socket.SHUT_RDWR)
+            except OSError:
+                pass
+            try:
                 self.sock.close()
-            except Exception:
+            except OSError:
                 pass
             self.sock = None

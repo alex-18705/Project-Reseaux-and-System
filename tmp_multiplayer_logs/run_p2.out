@@ -1,0 +1,11 @@
+[MAIN] Starting C proxy: D:\3A\PROJECT RESEAUX\PROJET_RESEAU\network\src\proxy.exe player_B 5001 6001 player_A 127.0.0.1 6000
+{'127.0.0.1'}
+Do you want to save this battle? (y/N): [NetworkBridge] Connected to C proxy at 127.0.0.1:5001
+[Online] player_B: received remote army from player_A
+[MAIN] Local peer_id=player_B
+[MAIN] UDP peer socket listening on 0.0.0.0:6001
+[MAIN] Remote peer configured: player_A -> 127.0.0.1:6000
+[MAIN] Python TCP IPC listening on 127.0.0.1:5001
+[MAIN] Waiting for Python IPC connection...
+[MAIN] Python IPC connected
+[MAIN] Starting event loop...
