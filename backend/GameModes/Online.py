@@ -240,7 +240,7 @@ class Online(GameMode):
 
             if "map" in payload and payload["map"]:
                 try:
-                    self.map = json_to_map(payload["map"])
+                    self.map.fussionner(json_to_map(payload["map"]))
                     self._deploy_my_army_for_current_map()
                     self._log_map_if_changed()
                 except Exception as e:
