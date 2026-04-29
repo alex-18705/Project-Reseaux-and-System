@@ -251,9 +251,12 @@ class Online(GameMode):
         self._broadcast_state()
 
     def _broadcast_state(self):
-        if not self.know_ip:
-            return
         payload = self.create_payload()
+        if not self.know_ip:
+            # Envoie un paquet bidon pour enregistrer le port Python auprès du proxy C
+            self.network_bridge.send_message("SYNC_UPDATE", "0.0.0.0", payload)
+            return
+            
         # Broadcast to all known IPs
         for ip in self.know_ip:
             self.network_bridge.send_message("SYNC_UPDATE", ip, payload)
@@ -278,6 +281,9 @@ class Online(GameMode):
         self.affichage.initialiser()
         remote_ip = list(self.know_ip)[0] if self.know_ip else None
         self.network_bridge.connect(remote_ip=remote_ip, lan_port=self.lan_port, remote_port=self.remote_port)
+        
+        # Envoyer immédiatement un premier paquet pour s'enregistrer auprès du proxy C
+        self._broadcast_state()
 
     def save(self):
         pass
