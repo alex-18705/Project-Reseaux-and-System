@@ -118,6 +118,20 @@ class Online(GameMode):
             print("[Online] Fermeture de la connexion réseau...")
             self.network_bridge.disconnect()
 
+    def request_unit_ownership(self, unit_id: str):
+        """Sends an OWNERSHIP_REQUEST to the current owner."""
+        ownership = get_ownership_manager()
+        current_owner = ownership.get_owner(unit_id)
+        if current_owner and current_owner != self.my_id:
+            ownership.request_ownership(unit_id, self.my_id)
+            # Find the IP of the current_owner (we broadcast if we don't know it specifically)
+            # For simplicity, we broadcast to all known IPs, the owner will process it.
+            for ip in self.know_ip:
+                self.network_bridge.send_message("OWNERSHIP_REQUEST", ip, {
+                    "unit_id": unit_id,
+                    "requester_id": self.my_id
+                })
+
     def message_receive(self):
         """
         Recuperer les messages reseau, synchroniser la map envoyee par le host,
@@ -133,8 +147,31 @@ class Online(GameMode):
                 print(f"[Online] Nouveau pair decouvert : {sender_ip}")
                 self.know_ip.add(sender_ip)
 
+            msg_type = msg.get("type", "SYNC_UPDATE")
             payload = msg.get("payload", {})
             if not isinstance(payload, dict):
+                continue
+                
+            if msg_type == "OWNERSHIP_REQUEST":
+                unit_id = payload.get("unit_id")
+                requester_id = payload.get("requester_id")
+                if unit_id and requester_id:
+                    ownership.request_ownership(unit_id, requester_id)
+                    # Automatically grant ownership if we are the current owner (for demonstration)
+                    if ownership.grant_ownership(unit_id, requester_id):
+                        print(f"[Ownership] Accord de la propriete de {unit_id} a {requester_id}")
+                        for ip in self.know_ip:
+                            self.network_bridge.send_message("OWNERSHIP_GRANT", ip, {
+                                "unit_id": unit_id,
+                                "new_owner_id": requester_id
+                            })
+                continue
+            elif msg_type == "OWNERSHIP_GRANT":
+                unit_id = payload.get("unit_id")
+                new_owner_id = payload.get("new_owner_id")
+                if unit_id and new_owner_id:
+                    print(f"[Ownership] Transfert de {unit_id} vers {new_owner_id} confirme")
+                    ownership.handle_grant(unit_id, new_owner_id)
                 continue
 
             if "map" in payload and payload["map"]:

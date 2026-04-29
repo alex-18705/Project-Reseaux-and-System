@@ -1,5 +1,5 @@
 from enum import IntEnum
-from typing import Dict, Optional
+from typing import Dict, Optional, Set
 
 class OwnershipStatus(IntEnum):
     """Status codes for network ownership verification."""
@@ -17,7 +17,8 @@ class OwnershipManager:
     def __init__(self, local_peer_id: str):
         self.local_peer_id = local_peer_id
         self._unit_to_peer: Dict[str, str] = {}  # Map: unit_id -> peer_id
-        self._registered_peers = {local_peer_id}
+        self._registered_peers: Set[str] = {local_peer_id}
+        self._pending_requests: Dict[str, str] = {} # Map: unit_id -> requester_peer_id
 
     def register_peer(self, peer_id: str):
         """Registers a new network peer."""
@@ -36,6 +37,34 @@ class OwnershipManager:
     def is_local_owner(self, unit_id: str) -> bool:
         """Checks if the local peer owns the unit."""
         return self.get_owner(unit_id) == self.local_peer_id
+
+    def request_ownership(self, unit_id: str, requester_id: str):
+        """Records a pending request for ownership transfer."""
+        if requester_id not in self._registered_peers:
+            self.register_peer(requester_id)
+        self._pending_requests[unit_id] = requester_id
+
+    def get_pending_request(self, unit_id: str) -> Optional[str]:
+        """Gets the peer ID that requested ownership of this unit, if any."""
+        return self._pending_requests.get(unit_id)
+
+    def grant_ownership(self, unit_id: str, requester_id: str) -> bool:
+        """
+        Grants ownership to a requester if the local peer is the current owner.
+        Returns True if successful, False otherwise.
+        """
+        if self.is_local_owner(unit_id):
+            self.assign_ownership(unit_id, requester_id)
+            if self._pending_requests.get(unit_id) == requester_id:
+                del self._pending_requests[unit_id]
+            return True
+        return False
+
+    def handle_grant(self, unit_id: str, new_owner_id: str):
+        """Updates ownership based on a grant received from the network."""
+        self.assign_ownership(unit_id, new_owner_id)
+        if self._pending_requests.get(unit_id) == new_owner_id:
+            del self._pending_requests[unit_id]
 
     def validate_action(self, action_data: dict, executor_peer_id: str) -> OwnershipStatus:
         """
