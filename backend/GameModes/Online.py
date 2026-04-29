@@ -169,7 +169,6 @@ class Online(GameMode):
             if sender_id and sender_id != self.my_id and sender_id != "unknown":
                 if sender_ip:
                     self.peer_ips[sender_id] = sender_ip
-<<<<<<< HEAD
                 if security and sender_id not in security.peer_session_keys:
                     last_hello = self.pending_handshakes.get(sender_id, 0)
                     import time
@@ -181,15 +180,6 @@ class Online(GameMode):
                             "public_key": security.get_my_public_key_pem(),
                             "peer_id": self.my_id
                         })
-=======
-                if security and sender_id not in security.peer_public_keys:
-                    print(f"[Online] Nouveau pair decouvert (ID) : {sender_id}")
-                    # Initiate handshake
-                    self.network_bridge.send_message("SECURE_HELLO", sender_ip, {
-                        "public_key": security.get_my_public_key_pem(),
-                        "peer_id": self.my_id
-                    })
->>>>>>> 152c4b2387993845f878fc81fcce50c0edaab082
 
             if msg_type == "SECURE_HELLO":
                 peer_public_key = payload.get("public_key")
