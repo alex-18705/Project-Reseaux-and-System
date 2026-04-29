@@ -15,12 +15,11 @@ class Test_coherence:
             if self.OTHER_ARMY.get(k,None) and other_army.get(k,None) :
                 report.extend(self.compare_army(self.OTHER_ARMY[k], other_army[k]))
 
+        self.print_report(report)
 
+    def set_armies(self,my_army, other_army :dict):
         self.MY_ARMY = my_army.deepcopy()
         self.OTHER_ARMY = other_army.deepcopy()
-
-
-        self.print_report(report)
 
     @staticmethod
     def compare_army(old_army, new_army):
@@ -28,16 +27,22 @@ class Test_coherence:
         for unit in new_army.units:
             #collision
 
+            
+
 
 
             old_unit = old_army.get_unit_by_id(unit.id)
             if old_unit :
-                #cooldown
+                # death
+                if not old_unit.is_alive() and unit.is_alive():
+                    report.append({"type": "zombie", "unit": unit})
+                # degat
                 if unit.hp > old_unit.hp:
                     report.append({"type":"hp", "unit" : unit})
-                #degat
-                if unit.old_unit.cooldown != 0 and unit.cooldown > old_unit.cooldown:
+                # cooldown
+                if old_unit.cooldown != 0 and unit.cooldown > old_unit.cooldown:
                     report.append({"type":"cooldown", "unit" : unit})
+
 
 
 
