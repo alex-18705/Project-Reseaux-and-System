@@ -2,6 +2,7 @@ import socket
 import json
 import threading
 import queue
+import zlib
 
 # ============================================================
 #   NetworkBridge — Pont réseau Python ↔ Proxy C (UDP)
@@ -163,7 +164,16 @@ class NetworkBridge:
                 if not data:
                     continue
 
-                ligne = data.decode('utf-8').strip()
+                try:
+                    data = zlib.decompress(data)
+                except zlib.error:
+                    pass # Fallback to uncompressed
+                    
+                try:
+                    ligne = data.decode('utf-8').strip()
+                except UnicodeDecodeError:
+                    continue
+                    
                 _recv_count += 1
                 if _recv_count <= 5 or _recv_count % 50 == 0:
                     print(f"[NetworkBridge] RAW recv #{_recv_count}: {len(data)} bytes from {addr}")
@@ -284,8 +294,9 @@ class NetworkBridge:
 
         try:
             # JSON compact : pas d'espaces → taille minimale
-            donnees = json.dumps(message, separators=(',', ':')) + '\n'
-            self.sock.sendto(donnees.encode('utf-8'), self.server_addr)
+            donnees_str = json.dumps(message, separators=(',', ':'))
+            donnees = zlib.compress(donnees_str.encode('utf-8'))
+            self.sock.sendto(donnees, self.server_addr)
 
             # Avertir si le datagramme dépasse le MTU standard (1500 octets)
             taille = len(donnees.encode('utf-8'))
