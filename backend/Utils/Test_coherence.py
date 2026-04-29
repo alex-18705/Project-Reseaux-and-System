@@ -16,7 +16,7 @@ class Test_coherence:
     def test_coherence(self,gamemode):
         report=[]
         if self.MY_ARMY and gamemode.my_army :
-            report.extend(self.compare_army(self.MY_ARMY, gamemode.my_army,map, gamemode.flat()))
+            report.extend(self.compare_army(self.MY_ARMY, gamemode.my_army,gamemode.map, gamemode.flat()))
         for k in gamemode.othersArmy.keys():
             if self.OTHER_ARMY and self.OTHER_ARMY.get(k,None) and gamemode.othersArmy.get(k,None) :
                 other_list = gamemode.othersArmy.copy()
