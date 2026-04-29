@@ -82,18 +82,22 @@ class NetworkBridge:
         try:
             import subprocess
             import os
-            
+
+            program_extension = ""
+            if os.name == "nt":
+                program_extension = ".exe"
+
             # Prefer proxy_udp_real_ip.exe for multi-device testing if available
-            proxy_real_ip = os.path.join("network", "proxy_udp_real_ip.exe")
-            proxy_standard = os.path.join("network", "proxy_udp.exe")
-            
+            proxy_real_ip = os.path.join("network", "proxy_udp_real_ip" + program_extension)
+            proxy_standard = os.path.join("network", "proxy_udp" + program_extension)
+
             if os.path.exists(proxy_real_ip):
                 proxy_path = proxy_real_ip
             elif os.path.exists(proxy_standard):
                 proxy_path = proxy_standard
             else:
                 # Fallback to local dir
-                proxy_path = "proxy_udp.exe"
+                proxy_path = "proxy_udp" + program_extension
 
             args = [proxy_path]
             if remote_ip:
