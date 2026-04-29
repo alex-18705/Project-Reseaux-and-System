@@ -93,6 +93,7 @@ class PyScreen(Affichage):
         self.camera_centered = False
         self.current_map_bounds = (0, 0, 0, 0) # (x_max, x_min, y_max, y_min)
         self.player_colors = {}
+        self.player_labels = {}
         self.color_palette = [
             (50, 100, 255),
             (255, 50, 50),
@@ -112,6 +113,18 @@ class PyScreen(Affichage):
             index = len(self.player_colors) % len(self.color_palette)
             self.player_colors[owner_id] = self.color_palette[index]
         return self.player_colors[owner_id]
+
+    def _label_for_owner(self, owner_id, fallback_index):
+        if owner_id == "army":
+            return f"Army {fallback_index}"
+        if owner_id not in self.player_labels:
+            index = len(self.player_labels)
+            if index < 26:
+                suffix = chr(ord("A") + index)
+            else:
+                suffix = str(index + 1)
+            self.player_labels[owner_id] = f"player_{suffix}"
+        return self.player_labels[owner_id]
 
     def _get_interpolated_position(self, unit):
         """Obtenir la position interpolée pour une animation fluide."""
@@ -524,7 +537,7 @@ class PyScreen(Affichage):
     def _draw_army_stats(self, army1: Army, army2: Army):
         panel_x = 10
         panel_y = 10
-        panel_width = 360
+        panel_width = min(560, self.WIDTH - 20)
         line_height = 25
         current_y = panel_y
 
@@ -569,7 +582,12 @@ class PyScreen(Affichage):
                 if ip:
                     ip_suffix = f" [{ip}]"
 
-            header = self.font.render(f"Army {index}{general_name}{ip_suffix}: {len(units)} units", True, color)
+            owner_label = self._label_for_owner(owner_id, index)
+            header_text = f"{owner_label}{general_name}{ip_suffix}: {len(units)} units"
+            header_font = self.font
+            if self.font.size(header_text)[0] > panel_width - 10:
+                header_font = self.small_font
+            header = header_font.render(header_text, True, color)
             self.screen.blit(header, (panel_x + 5, current_y))
             current_y += line_height
 

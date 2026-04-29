@@ -166,6 +166,8 @@ class Online(GameMode):
                 
             sender_id = msg.get("sender_id")
             if sender_id and sender_id != self.my_id and sender_id != "unknown":
+                if sender_ip:
+                    self.peer_ips[sender_id] = sender_ip
                 if security and sender_id not in security.peer_public_keys:
                     print(f"[Online] Nouveau pair decouvert (ID) : {sender_id}")
                     # Initiate handshake
@@ -202,7 +204,13 @@ class Online(GameMode):
 
             if not isinstance(payload, dict):
                 continue
-                
+
+            raw_peer_ips = payload.get("peer_ips", {})
+            peer_ips_payload = raw_peer_ips if isinstance(raw_peer_ips, dict) else {}
+            for peer_id, peer_ip in peer_ips_payload.items():
+                if peer_id != self.my_id and peer_ip:
+                    self.peer_ips[peer_id] = peer_ip
+
             if msg_type == "OWNERSHIP_REQUEST":
                 unit_id = payload.get("unit_id")
                 requester_id = payload.get("requester_id")
@@ -241,7 +249,9 @@ class Online(GameMode):
                 if army_id != self.my_id:
                     self.current_sender_id = army_id
                     ownership.register_peer(army_id)
-                    if sender_ip:
+                    if army_id in peer_ips_payload:
+                        self.peer_ips[army_id] = peer_ips_payload[army_id]
+                    elif sender_id == army_id and sender_ip:
                         self.peer_ips[army_id] = sender_ip
                     self.last_recv_time[army_id] = time.time()
                     try:
@@ -388,7 +398,10 @@ class Online(GameMode):
         for army_id, army in self.othersArmy.items():
             armies[army_id] = army_to_dict(army)
 
-        result = {"armies": armies}
+        result = {
+            "armies": armies,
+            "peer_ips": self.peer_ips
+        }
         # Only host (is_first) decides the map to avoid conflicts
         if self.is_first and self.map is not None and (self.tick < 20 or self.tick % 50 == 0):
             result["map"] = map_to_dict(self.map)
