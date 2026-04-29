@@ -210,7 +210,7 @@ class NetworkBridge:
                         if decrypted_payload:
                             msg["payload"] = decrypted_payload
                         else:
-                            print(f"[NetworkBridge] Security Error from {peer_id}: {error}")
+                            #print(f"[NetworkBridge] Security Error from {peer_id}: {error}")
                             continue
 
                 # ---- Filtre de réordonnancement ----
@@ -300,10 +300,10 @@ class NetworkBridge:
 
             # Avertir si le datagramme dépasse le MTU standard (1500 octets)
             taille = len(donnees)
-            if taille > 1400:
+            """if taille > 1400:
                 print(f"[NetworkBridge] ATTENTION : datagramme volumineux "
                       f"({taille} octets, MTU ~ 1500). Risque de fragmentation !")
-            return True
+            return True"""
         except Exception as e:
             print(f"[NetworkBridge] Erreur lors de l'envoi ({msg_type}) : {e}")
             return False
