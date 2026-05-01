@@ -1,29 +1,9 @@
 import socket
 import json
 import threading
-import queue
-import zlib
 
-# ============================================================
-#   NetworkBridge — Pont réseau Python ↔ Proxy C (UDP)
-#
-#   Fonctionnalités clés :
-#   - Numérotation de séquence : chaque paquet sortant estampillé
-#     "seq". Les paquets de type SYNC_UPDATE reçus hors ordre
-#     (seq ≤ dernier seq reçu) sont ignorés, évitant l'erreur
-#     de logique causée par le réordonnancement UDP.
-#   - JSON compact : separators=(',',':') supprime les espaces
-#     inutiles et minimise la taille du datagramme UDP pour
-#     rester sous la limite MTU de 1500 octets.
-#   - Socket timeout de 1 s : le thread peut vérifier
-#     is_connected et sortir proprement sans WinError 10038.
-# ============================================================
 
-from network.security_manager import SecurityManager
-
-# Types de messages dont l'ordre est critique :
-# si un paquet plus récent est arrivé avant, l'ancien est ignoré.
-_TYPES_SEQUENCES = {"SYNC_UPDATE"}
+SEQUENCED_TYPES = {"STATE_UPDATE"}
 
 
 class NetworkBridge:
@@ -48,6 +28,7 @@ class NetworkBridge:
         # Dernier numéro de séquence reçu par type de message
         # (seuls les types dans _TYPES_SEQUENCES sont filtrés)
         self._seq_in = {}
+        self.ownership_table = {}
 
         # Our own public/LAN IP — embedded in every outgoing packet
         # so that the remote peer can discover our address even though
@@ -242,26 +223,28 @@ class NetworkBridge:
                     print(f"[NetworkBridge] Erreur dans le thread de réception : {e}")
                 break
 
-        print("[NetworkBridge] Thread de réception arrêté.")
+        self.is_connected = False
+        print("[NetworkBridge] Disconnected from C proxy")
 
-    # ---- Envoi de messages ----
-    def send_message(self, msg_type, destination, payload_dict=None, peer_id=None):
-        """
-        Envoie un message JSON vers le Proxy C en UDP.
+    def _is_new_message(self, msg):
+        msg_type = msg.get("type")
+        payload = msg.get("payload", {})
+        seq = payload.get("seq")
 
-        Structure du datagramme :
-        {
-            "size": <taille en octets>
-            "dest" : <ip destination>
-            "dep" : <ip depart>
-            "seq":     <numéro de séquence entier croissant>,
-            "type":    <type du message>,
-            "payload": <données utiles>
-        }
+        if msg_type not in SEQUENCED_TYPES or seq is None:
+            return True
 
-        Le JSON est sérialisé sans espaces (separators=(',',':'))
-        pour minimiser la taille et rester sous le MTU de 1500 octets.
-        """
+        sender = msg.get("sender_id") or msg.get("sender_peer_id") or ""
+        key = (sender, msg_type)
+        last_seq = self._seq_in.get(key, -1)
+
+        if seq <= last_seq:
+            return False
+
+        self._seq_in[key] = seq
+        return True
+
+    def send_message(self, msg_type, target_peer_id="", payload=None):
         if not self.is_connected:
             return False
 
@@ -308,7 +291,60 @@ class NetworkBridge:
             print(f"[NetworkBridge] Erreur lors de l'envoi ({msg_type}) : {e}")
             return False
 
-    # ---- Lecture non-bloquante ----
+    def join(self):
+        return self.send_message("JOIN", "", {"peer_id": self.peer_id})
+
+    def broadcast(self, event_type, data):
+        return self.send_message("BROADCAST", "", {
+            "event_type": event_type,
+            "data": data,
+        })
+
+    def send_to(self, target_peer_id, event_type, data):
+        return self.send_message("SEND_TO", target_peer_id, {
+            "event_type": event_type,
+            "data": data,
+        })
+
+    def send_state_update(self, state):
+        self._seq_out += 1
+        return self.send_message("STATE_UPDATE", "", {
+            "seq": self._seq_out,
+            "state": state,
+        })
+
+    def request_ownership(self, target_peer_id, entity_id):
+        return self.send_message("OWNERSHIP_REQUEST", target_peer_id, {
+            "entity_id": entity_id,
+        })
+
+    def transfer_ownership(self, target_peer_id, entity_id, entity_state):
+        return self.send_message("OWNERSHIP_TRANSFER", target_peer_id, {
+            "entity_id": entity_id,
+            "state": entity_state,
+        })
+
+    def deny_ownership(self, target_peer_id, entity_id, reason=""):
+        return self.send_message("OWNERSHIP_DENIED", target_peer_id, {
+            "entity_id": entity_id,
+            "reason": reason,
+        })
+
+    def return_ownership(self, target_peer_id, entity_id, entity_state):
+        return self.send_message("OWNERSHIP_RETURN", target_peer_id, {
+            "entity_id": entity_id,
+            "state": entity_state,
+        })
+
+    def ping(self, target_peer_id=""):
+        return self.send_message("PING", target_peer_id, {})
+
+    def pong(self, target_peer_id=""):
+        return self.send_message("PONG", target_peer_id, {})
+
+    def shutdown(self):
+        return self.send_message("SHUTDOWN", "", {})
+
     def get_updates(self):
         """
         Retourne tous les messages disponibles dans la file,

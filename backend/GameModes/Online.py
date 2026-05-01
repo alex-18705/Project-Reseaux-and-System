@@ -106,6 +106,9 @@ class Online(GameMode):
                 unit.position = (x, y)
         self._army_mirrored_for_width = width
 
+    def army_entity_id(self, peer_id=None):
+        return f"army:{peer_id or self.my_id}"
+
     def flat(self):
         new = Army()
         all_units = []
@@ -313,15 +316,10 @@ class Online(GameMode):
             self._broadcast_state()
             return
 
-        if not self.has_started:
-            print("Joueur rejoint ! Début de la bataille.")
-            self.has_started = True
-
-        # Register our own units' ownership if not done
-        ownership = get_ownership_manager()
-        for unit in self.my_army.units:
-            ownership.assign_ownership(unit.id, self.my_id)
-
+        if self.network_bridge.owns_entity(self.army_entity_id()):
+            self.my_army.fight(self.map, otherArmy=all_enemy_army)
+            self.update_army(all_enemy_army)
+            self.network_bridge.send_state_update(self.create_state_payload())  
 
         report =self.Test_coherence.test_coherence(self)
         self.Test_coherence.print_report(report)
@@ -345,48 +343,57 @@ class Online(GameMode):
         # Incrémenter le tick
         self.tick += 1
 
-        self.Test_coherence.set_armies(self.my_army, self.othersArmy)
-        self._broadcast_state()
+    def apply_remote_state(self, state):
+        if not state:
+            return
+        peer_id = state.get("peer_id")
+        army_data = state.get("army")
+        entity_id = state.get("entity_id") or self.army_entity_id(peer_id)
+        owner_peer_id = state.get("owner_peer_id") or peer_id
+        ownership_version = int(state.get("ownership_version", 0) or 0)
 
-    def _broadcast_state(self):
-        payload_list = self.create_payload()
+        if not peer_id or peer_id == self.my_id or not army_data:
+            return
+        current_owner = self.network_bridge.get_entity_owner(entity_id)
+        if current_owner and owner_peer_id != current_owner:
+            print(
+                f"[Online] Ignored army state with conflicting owner: "
+                f"entity={entity_id}, claimed={owner_peer_id}, current={current_owner}"
+            )
+            return
+        self.network_bridge.register_entity_owner(entity_id, owner_peer_id, ownership_version)
+        if owner_peer_id != peer_id:
+            print(
+                f"[Online] Ignored non-authoritative army state: "
+                f"entity={entity_id}, peer={peer_id}, owner={owner_peer_id}"
+            )
+            return
 
-        for payload in payload_list:
-            if not self.know_ip:
-                # Envoie un paquet bidon pour enregistrer le port Python auprès du proxy C
-                self.network_bridge.send_message("SYNC_UPDATE", "0.0.0.0", payload)
-                return
+        if isinstance(army_data, str):
+            army = json_to_army(army_data)
+        else:
+            army = json_to_army(json.dumps(army_data))
+        army.gameMode = self
+        for unit in army.units:
+            unit.army = army
+        if peer_id not in self.othersArmy:
+            print(f"[Online] {self.my_id}: received remote army from {peer_id}")
+        self.othersArmy[peer_id] = army
 
-            # Broadcast to all known IPs
-            # In multi-peer mode, we must send to the IP associated with each peer ID
-            # using the correct session key.
-            other_peer_ips = []
-            for peer_id, ip in self.peer_ips.items():
-                if peer_id == self.my_id:
-                    continue
-                other_peer_ips.append(ip)
-                security = self.network_bridge.security_manager
-                if security and peer_id in security.peer_session_keys:
-                    self.network_bridge.send_message("SYNC_UPDATE", ip, payload, peer_id=peer_id)
-                else:
-                    self.network_bridge.send_message("SYNC_UPDATE", ip, payload)
-
-            # Fallback for IPs in know_ip that are not in peer_ips yet (handshake phase)
-            for ip in self.know_ip:
-                if ip not in other_peer_ips:
-                    self.network_bridge.send_message("SYNC_UPDATE", ip, payload)
-
-    def update_dead(self, all_enemies):
-        for army in self.othersArmy.values():
-            army.units = [u for u in army.units if u in all_enemies.units]
-
-    @property
-    def army1(self):
-        return self.my_army
-
-    @property
-    def army2(self):
-        return self.flat()
+    def create_state_payload(self):
+        entity_id = self.army_entity_id()
+        owner_peer_id = self.network_bridge.get_entity_owner(entity_id)
+        if owner_peer_id is None:
+            owner_peer_id = self.my_id
+            self.network_bridge.register_entity_owner(entity_id, owner_peer_id)
+        return {
+            "entity_id": entity_id,
+            "peer_id": self.my_id,
+            "owner_peer_id": owner_peer_id,
+            "ownership_version": self.network_bridge.get_ownership_version(entity_id),
+            "tick": self.tick,
+            "army": army_to_dict(self.my_army)
+        }
 
     def launch(self):
         self._remember_base_positions()
@@ -394,11 +401,50 @@ class Online(GameMode):
         self._log_map_if_changed()
 
         self.affichage.initialiser()
-        remote_ip = list(self.know_ip)[0] if self.know_ip else None
-        self.network_bridge.connect(remote_ip=remote_ip, lan_port=self.lan_port, remote_port=self.remote_port)
-        
-        # Envoyer immédiatement un premier paquet pour s'enregistrer auprès du proxy C
-        self._broadcast_state()
+        self.network_bridge.register_entity_owner(self.army_entity_id(), self.my_id)
+        self.network_bridge.connect()
+        self.network_bridge.join()
+
+    def handle_ownership_request(self, msg):
+        payload = msg.get("payload", {})
+        entity_id = payload.get("entity_id")
+        requester = msg.get("sender_id") or msg.get("sender_peer_id")
+
+        if not entity_id or not requester:
+            return
+
+        if not self.network_bridge.owns_entity(entity_id):
+            self.network_bridge.deny_ownership(
+                requester,
+                entity_id,
+                "not_current_owner",
+            )
+            return
+
+        state = self.create_state_payload() if entity_id == self.army_entity_id() else {}
+        self.network_bridge.transfer_ownership(requester, entity_id, state)
+
+    def handle_ownership_transfer(self, msg):
+        payload = msg.get("payload", {})
+        entity_id = payload.get("entity_id")
+        new_owner_id = payload.get("new_owner_id")
+        version = int(payload.get("ownership_version", 0) or 0)
+
+        if not entity_id or not new_owner_id:
+            return
+
+        self.network_bridge.register_entity_owner(entity_id, new_owner_id, version)
+        if new_owner_id == self.my_id and payload.get("state"):
+            self.apply_remote_state(payload["state"])
+
+    def handle_ownership_denied(self, msg):
+        payload = msg.get("payload", {})
+        entity_id = payload.get("entity_id", "")
+        reason = payload.get("reason", "")
+        print(f"[Online] Ownership denied for {entity_id}: {reason}")
+
+    def handle_ownership_return(self, msg):
+        self.handle_ownership_transfer(msg)
 
     def save(self):
         pass
