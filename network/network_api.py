@@ -1,5 +1,6 @@
-import socket
 import json
+import queue
+import socket
 import threading
 
 
@@ -7,220 +8,66 @@ SEQUENCED_TYPES = {"STATE_UPDATE"}
 
 
 class NetworkBridge:
-    def __init__(self, host='127.0.0.1', port=5000, security_enabled=True):
+    """
+    Bridge Python <-> proxy C.
+    IPC Python Layer
+    The C proxy listens on TCP localhost for Python, then forwards messages to
+    other proxies over UDP. Python only talks to this local TCP socket.
+    """
+
+    def __init__(self, peer_id, host="127.0.0.1", port=5000):
+        self.peer_id = peer_id
         self.host = host
         self.port = port
         self.sock = None
         self.is_connected = False
-        self.security_manager = SecurityManager() if security_enabled else None
-
-        # File d'attente thread-safe
-        # Sépare le thread réseau de la boucle principale du jeu
         self.incoming_queue = queue.Queue()
         self.receive_thread = None
-
-        # Handle to the Proxy C subprocess
-        self.proxy_process = None
-
-        # Numéro de séquence sortant : incrémenté à chaque envoi
         self._seq_out = 0
-
-        # Dernier numéro de séquence reçu par type de message
-        # (seuls les types dans _TYPES_SEQUENCES sont filtrés)
         self._seq_in = {}
-        self.ownership_table = {}
 
-        # Our own public/LAN IP — embedded in every outgoing packet
-        # so that the remote peer can discover our address even though
-        # ALL packets arrive locally from 127.0.0.1 (proxy loopback).
-        self._my_ip = self._detect_my_ip()
-
-    @staticmethod
-    def _detect_my_ip():
-        """Best-effort detection of the machine's outbound IP address."""
-        import socket as _sock
-        try:
-            s = _sock.socket(_sock.AF_INET, _sock.SOCK_DGRAM)
-            s.connect(("8.8.8.8", 80))        # doesn't actually send anything
-            ip = s.getsockname()[0]
-            s.close()
-            return ip
-        except Exception:
-            return "127.0.0.1"
-
-    def _sender_key_from_message(self, msg):
-        if "sender_id" in msg:
-            return msg["sender_id"]
-        payload = msg.get("payload", {})
-        if isinstance(payload, dict):
-            if "peer_id" in payload:
-                return payload["peer_id"]
-            armies = payload.get("armies", payload)
-            if isinstance(armies, dict) and armies:
-                return next(iter(armies.keys()))
-        return msg.get("dep") or msg.get("_sender_ip") or "unknown"
-
-
-    # ---- Connexion ----
-    def connect(self, remote_ip=None, lan_port=6000, remote_port=6000):
-        """Ouvre le socket UDP local, démarre le proxy C et le thread de réception."""
-        
-        # Démarrage automatique du programme C Proxy
-        try:
-            import subprocess
-            import os
-
-            program_extension = ""
-            if os.name == "nt":
-                program_extension = ".exe"
-
-            # Prefer proxy_udp_real_ip.exe for multi-device testing if available
-            proxy_real_ip = os.path.join("network", "proxy_udp_real_ip" + program_extension)
-            proxy_standard = os.path.join("network", "proxy_udp" + program_extension)
-
-            if os.path.exists(proxy_real_ip):
-                proxy_path = proxy_real_ip
-            elif os.path.exists(proxy_standard):
-                proxy_path = proxy_standard
-            else:
-                # Fallback to local dir
-                proxy_path = "proxy_udp" + program_extension
-
-            args = [proxy_path]
-            if remote_ip:
-                args.append(remote_ip)
-            else:
-                args.append("peer")
-            
-            # Use provided ports
-            args.append(str(self.port))      # py_port
-            args.append(str(lan_port))     # lan_listen_port
-            args.append(str(remote_port))  # remote_dest_port
-
-            print(f"[NetworkBridge] Starting Proxy C: {args}")
-            self.proxy_process = subprocess.Popen(args, creationflags=subprocess.CREATE_NEW_CONSOLE if os.name == 'nt' else 0)
-        except Exception as e:
-            print(f"[NetworkBridge] Warning: Could not start Proxy C automatically: {e}")
-
-        # Give Proxy C a moment to bind to its ports and punch through NAT
-        import time
-        time.sleep(1.0)
-
-        self.sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-        try:
-            self.sock.setsockopt(socket.SOL_SOCKET, socket.SO_SNDBUF, 65535)
-            self.sock.setsockopt(socket.SOL_SOCKET, socket.SO_RCVBUF, 65535)
-        except Exception as e:
-            print(f"[NetworkBridge] Warning: Could not set socket buffer size: {e}")
-        
-        # Timeout de 1 s : le thread peut vérifier is_connected périodiquement
-        self.sock.settimeout(1.0)
-        self.server_addr = (self.host, self.port)
-
+    def connect(self):
+        self.sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        self.sock.connect((self.host, self.port))
         self.is_connected = True
 
-        # Premier paquet pour que le Proxy C enregistre notre port éphémère
-        self.sock.sendto(b"\n", self.server_addr)
-
-        print(f"[NetworkBridge] Mon IP détectée : {self._my_ip}")
-        print("[NetworkBridge] Prêt en UDP ! (Proxy C sur port {})".format(self.port))
-
-        # Lancer le thread de réception en arrière-plan (daemon = stoppe avec le jeu)
         self.receive_thread = threading.Thread(target=self._listen_loop, daemon=True)
         self.receive_thread.start()
+
+        print(f"[NetworkBridge] Connected to C proxy at {self.host}:{self.port}")
         return True
 
-    # ---- Thread de réception ----
     def _listen_loop(self):
-        """
-        Thread en arrière-plan :
-        - Reçoit les datagrammes UDP depuis le Proxy C.
-        - Filtre les paquets obsolètes (numéro de séquence trop ancien).
-        - Place les messages valides dans la file d'attente.
-        """
-        _recv_count = 0
+        buffer = ""
         while self.is_connected:
             try:
-                data, addr = self.sock.recvfrom(65535)
+                data = self.sock.recv(4096)
                 if not data:
-                    continue
+                    self.is_connected = False
+                    break
 
-                try:
-                    data = zlib.decompress(data)
-                except zlib.error:
-                    pass # Fallback to uncompressed
-                    
-                try:
-                    ligne = data.decode('utf-8').strip()
-                except UnicodeDecodeError:
-                    continue
-                    
-                _recv_count += 1
-                if _recv_count <= 5 or _recv_count % 50 == 0:
-                    print(f"[NetworkBridge] RAW recv #{_recv_count}: {len(data)} bytes from {addr}")
-                if not ligne:
-                    continue
+                buffer += data.decode("utf-8")
 
-                try:
-                    msg = json.loads(ligne)
-                    # The proxy always forwards from 127.0.0.1, so addr[0]
-                    # is useless for peer discovery.  Instead we read the
-                    # "dep" field that the sender embedded in the packet.
-                    dep = msg.get("dep")
-                    if dep and dep != "127.0.0.1":
-                        msg["_sender_ip"] = dep
-                    else:
-                        msg["_sender_ip"] = addr[0]   # fallback (LAN / same machine)
-                except json.JSONDecodeError:
-                    # Paquet corrompu ou tronqué (fragmentation UDP) → ignorer
-                    print(f"[NetworkBridge] Erreur JSON ignorée "
-                          f"({len(ligne)} octets reçus)")
-                    continue
-
-                msg_type = msg.get("type")
-                seq      = msg.get("seq", -1)
-                sender_key = self._sender_key_from_message(msg)
-
-                # ---- Security Decryption & Verification ----
-                if self.security_manager and msg_type not in ["SECURE_HELLO", "SECURE_KEY_EXCHANGE"]:
-                    payload = msg.get("payload")
-                    if isinstance(payload, dict) and "ciphertext" in payload:
-                        # Find peer_id (sender_key might be the ID if already known)
-                        peer_id = sender_key
-                        decrypted_payload, error = self.security_manager.decrypt_and_verify(peer_id, payload)
-                        if decrypted_payload:
-                            msg["payload"] = decrypted_payload
-                        else:
-                            #print(f"[NetworkBridge] Security Error from {peer_id}: {error}")
-                            continue
-
-                # ---- Filtre de réordonnancement ----
-                # Pour les types sensibles à l'ordre (ex: SYNC_UPDATE),
-                # on ignore tout paquet dont le seq est inférieur ou égal
-                # au dernier seq reçu : c'est un paquet retardé.
-                if msg_type in _TYPES_SEQUENCES and seq != -1:
-                    seq_key = (msg_type, sender_key)
-                    dernier = self._seq_in.get(seq_key, -1)
-                    if seq <= dernier:
-                        # Paquet hors ordre → ignorer silencieusement
+                while "\n" in buffer:
+                    line, buffer = buffer.split("\n", 1)
+                    line = line.strip()
+                    if not line:
                         continue
-                    self._seq_in[seq_key] = seq
 
-                self.incoming_queue.put(msg)
+                    try:
+                        msg = json.loads(line)
+                    except json.JSONDecodeError:
+                        print(f"[NetworkBridge] Invalid JSON ignored: {line}")
+                        continue
 
-            except socket.timeout:
-                # Timeout normal : reboucler et vérifier is_connected
-                continue
-            except ConnectionResetError:
-                # Sur Windows, se produit si le Proxy n'est pas encore prêt (ICMP Port Unreachable)
-                # On ignore et on continue d'écouter
-                continue
+                    if self._is_new_message(msg):
+                        self.incoming_queue.put(msg)
+
             except OSError:
-                # Socket fermé par disconnect() → sortie propre
                 break
-            except Exception as e:
+            except Exception as exc:
                 if self.is_connected:
-                    print(f"[NetworkBridge] Erreur dans le thread de réception : {e}")
+                    print(f"[NetworkBridge] Receive error: {exc}")
                 break
 
         self.is_connected = False
@@ -246,49 +93,26 @@ class NetworkBridge:
 
     def send_message(self, msg_type, target_peer_id="", payload=None):
         if not self.is_connected:
+            print("[NetworkBridge] Not connected")
             return False
 
-        if payload_dict is None:
-            payload_dict = {}
-
-        # Horodatage par numéro de séquence
-        self._seq_out += 1
-
-        # ---- Security Encryption & Signing ----
-        if self.security_manager and msg_type not in ["SECURE_HELLO", "SECURE_KEY_EXCHANGE"] and peer_id:
-            secure_payload = self.security_manager.sign_and_encrypt(peer_id, payload_dict)
-            if secure_payload:
-                payload_dict = secure_payload
-            else:
-                # If we have a peer_id but no session key, we might need to handshake first
-                if peer_id in self.security_manager.peer_public_keys:
-                    print(f"[NetworkBridge] Warning: No session key for {peer_id}, sending unencrypted.")
+        if payload is None:
+            payload = {}
 
         message = {
-            "size": len(payload_dict),
-            "dest": destination,
-            "dep":  self._my_ip,   # our real IP so the remote side can add us to know_ip
-            "sender_id": getattr(self, "my_id", "unknown"),
-            "seq":  self._seq_out,
             "type": msg_type,
-            "payload": payload_dict
+            "sender_id": self.peer_id,
+            "target_peer_id": target_peer_id,
+            "payload": payload,
         }
 
-
         try:
-            # JSON compact : pas d'espaces → taille minimale
-            donnees_str = json.dumps(message, separators=(',', ':'))
-            donnees = zlib.compress(donnees_str.encode('utf-8'))
-            self.sock.sendto(donnees, self.server_addr)
-
-            # Avertir si le datagramme dépasse le MTU standard (1500 octets)
-            taille = len(donnees)
-            """if taille > 1400:
-                print(f"[NetworkBridge] ATTENTION : datagramme volumineux "
-                      f"({taille} octets, MTU ~ 1500). Risque de fragmentation !")
-            return True"""
-        except Exception as e:
-            print(f"[NetworkBridge] Erreur lors de l'envoi ({msg_type}) : {e}")
+            data = json.dumps(message, separators=(",", ":")) + "\n"
+            self.sock.sendall(data.encode("utf-8"))
+            return True
+        except Exception as exc:
+            print(f"[NetworkBridge] Send error: {exc}")
+            self.is_connected = False
             return False
 
     def join(self):
@@ -335,47 +159,62 @@ class NetworkBridge:
             "entity_id": entity_id,
             "state": entity_state,
         })
-
+    
     def ping(self, target_peer_id=""):
         return self.send_message("PING", target_peer_id, {})
-
+    
     def pong(self, target_peer_id=""):
         return self.send_message("PONG", target_peer_id, {})
-
+    
     def shutdown(self):
         return self.send_message("SHUTDOWN", "", {})
-
+    
     def get_updates(self):
-        """
-        Retourne tous les messages disponibles dans la file,
-        sans bloquer la boucle de jeu principale.
-        """
         messages = []
         while not self.incoming_queue.empty():
             messages.append(self.incoming_queue.get())
         return messages
 
-    # ---- Déconnexion propre ----
+    def apply_updates(self, game):
+        for msg in self.get_updates():
+            self.apply_update(game, msg)
+
+    def apply_update(self, game, msg):
+        msg_type = msg.get("type")
+        payload = msg.get("payload", {})
+
+        if msg_type == "STATE_UPDATE":
+            state = payload.get("state", payload)
+            if hasattr(game, "apply_remote_state"):
+                game.apply_remote_state(state)
+            return
+
+        if msg_type in {"BROADCAST", "SEND_TO", "REMOTE_EVENT"}:
+            event_type = payload.get("event_type")
+            data = payload.get("data", payload)
+            if hasattr(game, "handle_remote_event"):
+                game.handle_remote_event(event_type, data, msg)
+            return
+
+        if msg_type == "OWNERSHIP_REQUEST" and hasattr(game, "handle_ownership_request"):
+            game.handle_ownership_request(msg)
+        elif msg_type == "OWNERSHIP_TRANSFER" and hasattr(game, "handle_ownership_transfer"):
+            game.handle_ownership_transfer(msg)
+        elif msg_type == "OWNERSHIP_DENIED" and hasattr(game, "handle_ownership_denied"):
+            game.handle_ownership_denied(msg)
+        elif msg_type == "OWNERSHIP_RETURN" and hasattr(game, "handle_ownership_return"):
+            game.handle_ownership_return(msg)
+
     def disconnect(self):
-        """
-        Ferme la connexion de façon sécurisée :
-        is_connected = False d'abord → le thread sort à son prochain
-        timeout → puis on ferme le socket (évite WinError 10038).
-        """
-        self.is_connected = False   # Signal au thread de s'arrêter
-        
-        # Terminer le processus Proxy C s'il est en cours
-        if self.proxy_process:
-            try:
-                self.proxy_process.terminate()
-                print("[NetworkBridge] Proxy C terminé.")
-            except Exception as e:
-                print(f"[NetworkBridge] Erreur lors de la fermeture du Proxy C : {e}")
-            self.proxy_process = None
+        self.is_connected = False
 
         if self.sock:
             try:
+                self.sock.shutdown(socket.SHUT_RDWR)
+            except OSError:
+                pass
+            try:
                 self.sock.close()
-            except Exception:
+            except OSError:
                 pass
             self.sock = None
