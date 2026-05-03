@@ -482,7 +482,8 @@ class Online(GameMode):
             return
 
         state = self.create_state_payload() if entity_id == self.army_entity_id() else {}
-        self.network_bridge.transfer_ownership(requester, entity_id, state)
+        next_version = self.network_bridge.get_ownership_version(entity_id) + 1
+        self.network_bridge.transfer_ownership(requester, entity_id, state, next_version)
 
     def handle_ownership_transfer(self, msg):
         payload = msg.get("payload", {})

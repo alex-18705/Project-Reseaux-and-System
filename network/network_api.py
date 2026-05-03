@@ -174,10 +174,11 @@ class NetworkBridge:
             "reason": reason,
         })
 
-    def transfer_ownership(self, target_peer_id, entity_id, entity_state):
+    def transfer_ownership(self, target_peer_id, entity_id, entity_state, ownership_version):
         return self.send_message("OWNERSHIP_TRANSFER", target_peer_id, {
             "entity_id": entity_id,
             "new_owner_id": target_peer_id,
+            "ownership_version": int(ownership_version),
             "state": entity_state,
         })
 
@@ -187,9 +188,11 @@ class NetworkBridge:
             "reason": reason,
         })
 
-    def return_ownership(self, target_peer_id, entity_id, entity_state):
+    def return_ownership(self, target_peer_id, entity_id, entity_state, ownership_version):
         return self.send_message("OWNERSHIP_RETURN", target_peer_id, {
             "entity_id": entity_id,
+            "new_owner_id": target_peer_id,
+            "ownership_version": int(ownership_version),
             "state": entity_state,
         })
     
