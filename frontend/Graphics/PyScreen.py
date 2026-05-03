@@ -1,5 +1,6 @@
 import sys
 import time
+import hashlib
 from time import sleep
 
 import pygame
@@ -137,9 +138,14 @@ class PyScreen(Affichage):
             }
 
         if owner_id not in self.player_styles:
-            index = (fallback_index - 1) if fallback_index else len(self.player_styles)
+            # Deterministic fallback so the same owner gets the same color on every peer.
+            if owner_id:
+                digest = hashlib.md5(str(owner_id).encode("utf-8")).hexdigest()
+                index = int(digest[:8], 16)
+            else:
+                index = (fallback_index - 1) if fallback_index else len(self.player_styles)
             self.player_styles[owner_id] = {
-                "label": self._label_for_slot(index),
+                "label": self._label_for_slot(index % 26),
                 "color": self.color_palette[index % len(self.color_palette)]
             }
         return self.player_styles[owner_id]
