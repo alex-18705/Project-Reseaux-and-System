@@ -1,6 +1,7 @@
 import json
 import queue
 import socket
+import subprocess
 import threading
 
 
@@ -15,10 +16,13 @@ class NetworkBridge:
     other proxies over UDP. Python only talks to this local TCP socket.
     """
 
-    def __init__(self, peer_id, host="127.0.0.1", port=5000):
+    def __init__(self, peer_id="peer_local", host="127.0.0.1", port=5000, auto_start=False, proxy_cmd=None):
         self.peer_id = peer_id
         self.host = host
         self.port = port
+        self.auto_start = auto_start
+        self.proxy_cmd = proxy_cmd
+        self.proxy_process = None
         self.sock = None
         self.is_connected = False
         self.incoming_queue = queue.Queue()
@@ -27,6 +31,8 @@ class NetworkBridge:
         self._seq_in = {}
 
     def connect(self):
+        if self.auto_start and self.proxy_process is None and self.proxy_cmd:
+            self.proxy_process = subprocess.Popen(self.proxy_cmd)
         self.sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         self.sock.connect((self.host, self.port))
         self.is_connected = True
@@ -96,8 +102,25 @@ class NetworkBridge:
             print("[NetworkBridge] Not connected")
             return False
 
+        # - send_message("TYPE", {"k": "v"})
+        # - send_message("TYPE", target_peer_id="peer_2", payload={...})
+        # - send_message("TYPE", "peer_2", {...})
+        if isinstance(target_peer_id, dict) and payload is None:
+            payload = target_peer_id
+            target_peer_id = ""
+
+        if target_peer_id is None:
+            target_peer_id = ""
+
+        if not isinstance(target_peer_id, str):
+            print("[NetworkBridge] target_peer_id must be a string")
+            return False
+
         if payload is None:
             payload = {}
+        elif not isinstance(payload, dict):
+            print("[NetworkBridge] payload must be a dict")
+            return False
 
         message = {
             "type": msg_type,
@@ -124,8 +147,8 @@ class NetworkBridge:
             "data": data,
         })
 
-    def send_to(self, target_peer_id, event_type, data):
-        return self.send_message("SEND_TO", target_peer_id, {
+    def send_to(self, event_type, target_peer_id="", data=None):
+        return self.send_message("SEND_TO", target_peer_id or "", {
             "event_type": event_type,
             "data": data,
         })
@@ -137,14 +160,16 @@ class NetworkBridge:
             "state": state,
         })
 
-    def request_ownership(self, target_peer_id, entity_id):
+    def request_ownership(self, target_peer_id, entity_id, reason=""):
         return self.send_message("OWNERSHIP_REQUEST", target_peer_id, {
             "entity_id": entity_id,
+            "reason": reason,
         })
 
     def transfer_ownership(self, target_peer_id, entity_id, entity_state):
         return self.send_message("OWNERSHIP_TRANSFER", target_peer_id, {
             "entity_id": entity_id,
+            "new_owner_id": target_peer_id,
             "state": entity_state,
         })
 
@@ -218,3 +243,7 @@ class NetworkBridge:
             except OSError:
                 pass
             self.sock = None
+
+        if self.proxy_process is not None:
+            self.proxy_process.terminate()
+            self.proxy_process = None
