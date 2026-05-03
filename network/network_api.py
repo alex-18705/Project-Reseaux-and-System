@@ -20,6 +20,8 @@ class NetworkBridge:
         self.peer_id = peer_id
         self.host = host
         self.port = port
+        self._my_ip = host
+        self.security_manager = None
         self.auto_start = auto_start
         self.proxy_cmd = proxy_cmd
         self.proxy_process = None
@@ -29,6 +31,8 @@ class NetworkBridge:
         self.receive_thread = None
         self._seq_out = 0
         self._seq_in = {}
+        self._entity_owners = {}
+        self._entity_versions = {}
 
     def connect(self):
         if self.auto_start and self.proxy_process is None and self.proxy_cmd:
@@ -97,10 +101,14 @@ class NetworkBridge:
         self._seq_in[key] = seq
         return True
 
-    def send_message(self, msg_type, target_peer_id="", payload=None):
+    def send_message(self, msg_type, target_peer_id="", payload=None, **kwargs):
         if not self.is_connected:
             print("[NetworkBridge] Not connected")
             return False
+
+        peer_id = kwargs.get("peer_id")
+        if isinstance(peer_id, str) and peer_id:
+            target_peer_id = peer_id
 
         # - send_message("TYPE", {"k": "v"})
         # - send_message("TYPE", target_peer_id="peer_2", payload={...})
@@ -247,3 +255,22 @@ class NetworkBridge:
         if self.proxy_process is not None:
             self.proxy_process.terminate()
             self.proxy_process = None
+
+    # ---- Compatibility helpers used by Online mode ----
+    def register_entity_owner(self, entity_id, owner_peer_id, ownership_version=0):
+        if not entity_id or not owner_peer_id:
+            return
+        local_version = self._entity_versions.get(entity_id, -1)
+        if ownership_version < local_version:
+            return
+        self._entity_owners[entity_id] = owner_peer_id
+        self._entity_versions[entity_id] = ownership_version
+
+    def get_entity_owner(self, entity_id):
+        return self._entity_owners.get(entity_id)
+
+    def get_ownership_version(self, entity_id):
+        return self._entity_versions.get(entity_id, 0)
+
+    def owns_entity(self, entity_id):
+        return self.get_entity_owner(entity_id) == self.peer_id
