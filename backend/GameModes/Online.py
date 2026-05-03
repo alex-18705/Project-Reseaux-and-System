@@ -11,7 +11,7 @@ from backend.Utils.class_by_name import general_from_name
 from backend.Class.Units.Knight import Knight
 from backend.Class.Units.Pikeman import Pikeman
 from backend.Class.Units.Crossbowman import Crossbowman
-from backend.Utils.network_ownership import initialize_ownership, get_ownership_manager
+from backend.Utils.network_ownership import StateUpdateStatus, initialize_ownership, get_ownership_manager
 from backend.Utils.convert_json import json_to_army, army_to_dict, map_to_dict, json_to_map
 from network.network_api import NetworkBridge
 
@@ -270,17 +270,22 @@ class Online(GameMode):
                     if ownership.grant_ownership(unit_id, requester_id):
                         print(f"[Ownership] Accord de la propriete de {unit_id} a {requester_id}")
                         for ip in self.know_ip:
-                            self.network_bridge.send_message("OWNERSHIP_GRANT", ip, {
-                                "unit_id": unit_id,
-                                "new_owner_id": requester_id
+                            self.network_bridge.send_message("OWNERSHIP_TRANSFER", ip, {
+                                "entity_id": unit_id,
+                                "new_owner_id": requester_id,
+                                "ownership_version": ownership.get_ownership_version(unit_id),
                             })
                 continue
-            elif msg_type == "OWNERSHIP_GRANT":
-                unit_id = payload.get("unit_id")
+            elif msg_type == "OWNERSHIP_TRANSFER":
+                unit_id = payload.get("entity_id") or payload.get("unit_id")
                 new_owner_id = payload.get("new_owner_id")
                 if unit_id and new_owner_id:
                     print(f"[Ownership] Transfert de {unit_id} vers {new_owner_id} confirme")
-                    ownership.handle_grant(unit_id, new_owner_id)
+                    ownership.apply_ownership_transfer(
+                        unit_id,
+                        new_owner_id,
+                        int(payload.get("ownership_version", 0) or 0),
+                    )
                 continue
 
             if "map" in payload and payload["map"]:
@@ -371,6 +376,8 @@ class Online(GameMode):
                     # Le joueur s'est déconnecté. On simule son armée via l'IA contre NOUS.
                     self.current_sender_id = army_id
                     army.fight(self.map, otherArmy=self.my_army)
+                    ownership = get_ownership_manager()
+                    ownership.handle_peer_disconnect(army_id, fallback_owner_id=self.my_id)
         
         # Incrémenter le tick
         self.tick += 1
@@ -426,6 +433,9 @@ class Online(GameMode):
         self._mark_army_owner(army, owner_peer_id)
         # Keep ownership table in sync with the latest remote state to avoid false rejects.
         ownership = get_ownership_manager()
+        seq = int(state.get("seq", 0) or 0)
+        status = ownership.validate_and_track_state_update(entity_id, peer_id, ownership_version, seq)
+
         ownership.register_peer(owner_peer_id)
         for unit in army.units:
             ownership.assign_ownership(unit.id, owner_peer_id)
@@ -433,6 +443,11 @@ class Online(GameMode):
             unit.army = army
         if peer_id not in self.othersArmy:
             print(f"[Online] {self.my_id}: received remote army from {peer_id}")
+
+        if status != StateUpdateStatus.APPLIED:
+            print(f"[Online] State update for {entity_id} from {peer_id} rejected: {status}")
+            return
+
         self.othersArmy[peer_id] = army
 
     def create_state_payload(self):
@@ -494,6 +509,12 @@ class Online(GameMode):
         if not entity_id or not new_owner_id:
             return
 
+        ownership = get_ownership_manager()
+        applied = ownership.apply_ownership_transfer(entity_id, new_owner_id, version)
+        if not applied:
+            print(f"[Online] Failed to apply ownership grant for {entity_id} to {new_owner_id}")
+            return
+        
         self.network_bridge.register_entity_owner(entity_id, new_owner_id, version)
         if new_owner_id == self.my_id and payload.get("state"):
             self.apply_remote_state(payload["state"])
@@ -502,6 +523,10 @@ class Online(GameMode):
         payload = msg.get("payload", {})
         entity_id = payload.get("entity_id", "")
         reason = payload.get("reason", "")
+        sender = msg.get("sender_id") or msg.get("sender_peer_id", "unknown")
+        ownership = get_ownership_manager()
+        ownership.handle_ownership_denied(entity_id, self.my_id)
+
         print(f"[Online] Ownership denied for {entity_id}: {reason}")
 
     def handle_ownership_return(self, msg):
