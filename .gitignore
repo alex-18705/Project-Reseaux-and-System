@@ -212,3 +212,9 @@ __marimo__/
 *.png
 *.jpg
 /network/CHECK.md
+
+/saves/
+/snapshots/
+/tournament_reports/
+/reports/
+*.exe
