@@ -150,6 +150,23 @@ int send_to_peer_id(AppContext *ctx, const char *peer_id, const char *msg, size_
     return send_to_peer_index(ctx, index, msg, len);
 }
 
+int send_to_peer_id_except_addr(
+    AppContext *ctx,
+    const char *peer_id,
+    const char *msg,
+    size_t len,
+    const struct sockaddr_in *excluded_addr
+) {
+    int index = find_peer_by_id(ctx, peer_id);
+    if (index < 0) {
+        return -1;
+    }
+    if (excluded_addr && same_peer_addr(&ctx->peers[index].addr, excluded_addr)) {
+        return 0;
+    }
+    return send_to_peer_index(ctx, index, msg, len);
+}
+
 int broadcast_to_peers(AppContext *ctx, const char *msg, size_t len) {
     int i;
     int sent_count = 0;
@@ -161,6 +178,34 @@ int broadcast_to_peers(AppContext *ctx, const char *msg, size_t len) {
             continue;
         }
         if (ctx->local_peer_id[0] != '\0' && strcmp(ctx->peers[i].peer_id, ctx->local_peer_id) == 0) {
+            continue;
+        }
+        if (send_to_peer_index(ctx, i, msg, len) >= 0) {
+            sent_count++;
+        }
+    }
+    return sent_count;
+}
+
+int broadcast_to_peers_except_addr(
+    AppContext *ctx,
+    const char *msg,
+    size_t len,
+    const struct sockaddr_in *excluded_addr
+) {
+    int i;
+    int sent_count = 0;
+    if (!ctx || !msg || len == 0) {
+        return -1;
+    }
+    for (i = 0; i < ctx->peer_count; ++i) {
+        if (!ctx->peers[i].active) {
+            continue;
+        }
+        if (ctx->local_peer_id[0] != '\0' && strcmp(ctx->peers[i].peer_id, ctx->local_peer_id) == 0) {
+            continue;
+        }
+        if (excluded_addr && same_peer_addr(&ctx->peers[i].addr, excluded_addr)) {
             continue;
         }
         if (send_to_peer_index(ctx, i, msg, len) >= 0) {

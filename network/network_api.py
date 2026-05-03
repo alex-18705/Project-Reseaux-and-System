@@ -163,6 +163,9 @@ class NetworkBridge:
 
     def send_state_update(self, state):
         self._seq_out += 1
+        if isinstance(state, dict):
+            state = dict(state)
+            state.setdefault("seq", self._seq_out)
         return self.send_message("STATE_UPDATE", "", {
             "seq": self._seq_out,
             "state": state,
@@ -221,6 +224,9 @@ class NetworkBridge:
 
         if msg_type == "STATE_UPDATE":
             state = payload.get("state", payload)
+            if isinstance(state, dict) and "seq" not in state and "seq" in payload:
+                state = dict(state)
+                state["seq"] = payload["seq"]
             if hasattr(game, "apply_remote_state"):
                 game.apply_remote_state(state)
             return
@@ -262,12 +268,17 @@ class NetworkBridge:
     # ---- Compatibility helpers used by Online mode ----
     def register_entity_owner(self, entity_id, owner_peer_id, ownership_version=0):
         if not entity_id or not owner_peer_id:
-            return
+            return False
         local_version = self._entity_versions.get(entity_id, -1)
         if ownership_version < local_version:
-            return
+            return False
+        if ownership_version == local_version:
+            local_owner = self._entity_owners.get(entity_id)
+            if local_owner is not None and local_owner != owner_peer_id:
+                return False
         self._entity_owners[entity_id] = owner_peer_id
         self._entity_versions[entity_id] = ownership_version
+        return True
 
     def get_entity_owner(self, entity_id):
         return self._entity_owners.get(entity_id)

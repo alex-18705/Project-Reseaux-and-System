@@ -47,8 +47,39 @@ static int forward_to_python(AppContext *ctx, const char *buffer, size_t len) {
     return sent;
 }
 
+static int payload_has_key(const Message *msg, const char *key) {
+    char pattern[64];
+    if (!msg || !key) {
+        return 0;
+    }
+    snprintf(pattern, sizeof(pattern), "\"%s\"", key);
+    return strstr(msg->payload, pattern) != NULL;
+}
+
+static int validate_message_payload(const Message *msg) {
+    if (!msg) {
+        return 0;
+    }
+
+    switch (msg->kind) {
+        case MSG_STATE_UPDATE:
+            return payload_has_key(msg, "seq") && payload_has_key(msg, "state");
+        case MSG_OWNERSHIP_REQUEST:
+        case MSG_OWNERSHIP_TRANSFER:
+        case MSG_OWNERSHIP_DENIED:
+        case MSG_OWNERSHIP_RETURN:
+            return payload_has_key(msg, "entity_id");
+        default:
+            return 1;
+    }
+}
+
 static int forward_to_peers(AppContext *ctx, const Message *msg, const char *buffer, size_t len) {
     if (!ctx || !msg || !buffer || len == 0) {
+        return -1;
+    }
+    if (!validate_message_payload(msg)) {
+        fprintf(stderr, "[handlers] invalid payload for message type '%s'\n", msg->type);
         return -1;
     }
 
@@ -62,14 +93,16 @@ static int forward_to_peers(AppContext *ctx, const Message *msg, const char *buf
 
         case MSG_SEND_TO:
         case MSG_OWNERSHIP_REQUEST:
-        case MSG_OWNERSHIP_TRANSFER:
         case MSG_OWNERSHIP_DENIED:
-        case MSG_OWNERSHIP_RETURN:
             if (msg->target_peer_id[0] == '\0') {
                 fprintf(stderr, "[handlers] message '%s' has no target_peer_id\n", msg->type);
                 return -1;
             }
             return send_to_peer_id(ctx, msg->target_peer_id, buffer, len);
+
+        case MSG_OWNERSHIP_TRANSFER:
+        case MSG_OWNERSHIP_RETURN:
+            return route_to_peer_or_broadcast(ctx, msg, buffer, len);
 
         case MSG_SHUTDOWN:
             ctx->running = 0;
@@ -91,6 +124,36 @@ static int forward_to_peers(AppContext *ctx, const Message *msg, const char *buf
         default:
             fprintf(stderr, "[handlers] unknown message type '%s'\n", msg->type);
             return -1;
+    }
+}
+
+static int is_message_for_local_python(AppContext *ctx, const Message *msg) {
+    if (!ctx || !msg) {
+        return 0;
+    }
+    if (msg->target_peer_id[0] == '\0') {
+        return 1;
+    }
+    return ctx->local_peer_id[0] != '\0' && strcmp(msg->target_peer_id, ctx->local_peer_id) == 0;
+}
+
+static void relay_peer_message(AppContext *ctx, const Message *msg, const char *buffer, size_t len, const struct sockaddr_in *src_addr) {
+    int relayed = 0;
+    if (!ctx || !msg || !buffer || len == 0 || !src_addr) {
+        return;
+    }
+    if (msg->sender_peer_id[0] != '\0' && strcmp(msg->sender_peer_id, ctx->local_peer_id) == 0) {
+        return;
+    }
+
+    if (msg->target_peer_id[0] == '\0') {
+        relayed = broadcast_to_peers_except_addr(ctx, buffer, len, src_addr);
+    } else if (!is_message_for_local_python(ctx, msg)) {
+        relayed = send_to_peer_id_except_addr(ctx, msg->target_peer_id, buffer, len, src_addr);
+    }
+
+    if (relayed < 0) {
+        fprintf(stderr, "[handlers] unable to relay message type '%s'\n", msg->type);
     }
 }
 
@@ -120,8 +183,18 @@ void handle_peer_data(AppContext *ctx) {
         fprintf(stderr, "[handlers] dropping invalid packet from unknown peer %s:%u\n", inet_ntoa(src_addr.sin_addr), (unsigned)ntohs(src_addr.sin_port));
         return;
     }
+    if (!validate_message_payload(&msg)) {
+        fprintf(stderr, "[handlers] dropping packet with invalid payload for '%s'\n", msg.type);
+        return;
+    }
 
     remember_peer_from_message(ctx, &msg, &src_addr, src_addr_len);
+    relay_peer_message(ctx, &msg, buffer, (size_t)received, &src_addr);
+
+    if (!is_message_for_local_python(ctx, &msg)) {
+        return;
+    }
+
     if (ctx->python_fd == INVALID_FD){
         fprintf(stderr, "[handlers] Python IPC socket is not connected\n");
         return;

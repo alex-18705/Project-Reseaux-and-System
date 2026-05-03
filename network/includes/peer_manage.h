@@ -16,4 +16,19 @@ int send_to_peer_id(AppContext *ctx, const char *peer_id, const char *msg, size_
 
 int broadcast_to_peers(AppContext *ctx, const char *msg, size_t len);
 
+int send_to_peer_id_except_addr(
+    AppContext *ctx,
+    const char *peer_id,
+    const char *msg,
+    size_t len,
+    const struct sockaddr_in *excluded_addr
+);
+
+int broadcast_to_peers_except_addr(
+    AppContext *ctx,
+    const char *msg,
+    size_t len,
+    const struct sockaddr_in *excluded_addr
+);
+
 #endif
