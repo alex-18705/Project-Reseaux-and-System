@@ -211,3 +211,4 @@ __marimo__/
 /network/test/**
 *.png
 *.jpg
+/network/CHECK.md
