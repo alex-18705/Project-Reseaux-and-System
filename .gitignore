@@ -209,3 +209,5 @@ __marimo__/
 /.idea/
 /network/test/
 /network/test/**
+.png
+.jpg
