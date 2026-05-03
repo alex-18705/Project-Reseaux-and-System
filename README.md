@@ -139,3 +139,8 @@ L'Ownership Manager (`backend/Utils/network_ownership.py`) assure que :
 gcc -o network/proxy_udp_real_ip.x network/proxy_udp_real_ip.c -pthread
 python3 main.py online --create --general MajorDaft --army_file army/cube2.army --map_file map/superflat.map --pygame
 python3 main.py online --join [ip] --general MajorDaft --army_file army/cube2.army --map_file map/superflat.map --pygame
+
+
+python main.py online --create --general MajorDaft --army_file army/cube2.army --map_file map/superflat.map --pygame --py_port 5000 --lan_port 6000
+
+python main.py online --join 127.0.0.1 --general MajorDaft --army_file army/cube2.army --map_file map/superflat.map --pygame --py_port 5001 --lan_port 6001 --remote_port 6000
