@@ -9,6 +9,16 @@ class OwnershipStatus(IntEnum):
     DENIED_MALFORMED_ACTION = 3
     DENIED_UNREGISTERED_PEER = 4
 
+
+class StateUpdateStatus(IntEnum):
+    """Status codes for remote state update validation."""
+    APPLIED = 0
+    DENIED_UNKNOWN_ENTITY = 1
+    DENIED_STALE_OWNERSHIP_VERSION = 2
+    DENIED_NOT_OWNER = 3
+    DENIED_STALE_SEQ = 4
+    DENIED_MALFORMED = 5
+
 class OwnershipManager:
     """
     Manages and verifies network ownership of game units.
@@ -19,6 +29,8 @@ class OwnershipManager:
         self._unit_to_peer: Dict[str, str] = {}  # Map: unit_id -> peer_id
         self._registered_peers: Set[str] = {local_peer_id}
         self._pending_requests: Dict[str, str] = {} # Map: unit_id -> requester_peer_id
+        self._ownership_version: Dict[str, int] = {}  # Map: unit_id -> ownership_version
+        self._last_state_seq: Dict[str, int] = {}  # Map: unit_id -> latest accepted seq
 
     def register_peer(self, peer_id: str):
         """Registers a new network peer."""
@@ -29,6 +41,14 @@ class OwnershipManager:
         if peer_id not in self._registered_peers:
             self.register_peer(peer_id)
         self._unit_to_peer[unit_id] = peer_id
+        if unit_id not in self._ownership_version:
+            self._ownership_version[unit_id] = 0
+        if unit_id not in self._last_state_seq:
+            self._last_state_seq[unit_id] = -1
+
+    def get_ownership_version(self, unit_id: str) -> int:
+        """Gets the current ownership version for the unit, or -1 if unknown."""
+        return self._ownership_version.get(unit_id, -1)
 
     def get_owner(self, unit_id: str) -> Optional[str]:
         """Returns the peer_id owning the given unit_id."""
@@ -55,6 +75,8 @@ class OwnershipManager:
         """
         if self.is_local_owner(unit_id):
             self.assign_ownership(unit_id, requester_id)
+            self._ownership_version[unit_id] = self.get_ownership_version(unit_id) + 1
+            self._last_state_seq[unit_id] = -1
             if self._pending_requests.get(unit_id) == requester_id:
                 del self._pending_requests[unit_id]
             return True
@@ -63,8 +85,64 @@ class OwnershipManager:
     def handle_grant(self, unit_id: str, new_owner_id: str):
         """Updates ownership based on a grant received from the network."""
         self.assign_ownership(unit_id, new_owner_id)
+        self._ownership_version[unit_id] = self.get_ownership_version(unit_id) + 1
+        self._last_state_seq[unit_id] = -1
         if self._pending_requests.get(unit_id) == new_owner_id:
             del self._pending_requests[unit_id]
+
+    def apply_ownership_transfer(self, unit_id: str, new_owner_id: str, incoming_version: int) -> bool:
+        """
+        Applies ownership transfer only if incoming_version is strictly newer.
+        Returns True when applied, False when stale/invalid.
+        """
+        if not unit_id or not new_owner_id or not isinstance(incoming_version, int):
+            return False
+        if new_owner_id not in self._registered_peers:
+            self.register_peer(new_owner_id)
+
+        local_version = self.get_ownership_version(unit_id)
+        if local_version >= incoming_version:
+            return False
+
+        self._unit_to_peer[unit_id] = new_owner_id
+        self._ownership_version[unit_id] = incoming_version
+        self._last_state_seq[unit_id] = -1
+        if self._pending_requests.get(unit_id) == new_owner_id:
+            del self._pending_requests[unit_id]
+        return True
+
+    def validate_and_track_state_update(
+        self,
+        unit_id: str,
+        sender_peer_id: str,
+        incoming_ownership_version: int,
+        seq: int,
+    ) -> StateUpdateStatus:
+        """
+        Verifies remote state ownership + recency before applying state.
+        """
+        if not unit_id or not sender_peer_id:
+            return StateUpdateStatus.DENIED_MALFORMED
+        if not isinstance(incoming_ownership_version, int) or not isinstance(seq, int):
+            return StateUpdateStatus.DENIED_MALFORMED
+
+        owner_id = self.get_owner(unit_id)
+        if owner_id is None:
+            return StateUpdateStatus.DENIED_UNKNOWN_ENTITY
+
+        local_version = self.get_ownership_version(unit_id)
+        if incoming_ownership_version != local_version:
+            return StateUpdateStatus.DENIED_STALE_OWNERSHIP_VERSION
+
+        if sender_peer_id != owner_id:
+            return StateUpdateStatus.DENIED_NOT_OWNER
+
+        last_seq = self._last_state_seq.get(unit_id, -1)
+        if seq <= last_seq:
+            return StateUpdateStatus.DENIED_STALE_SEQ
+
+        self._last_state_seq[unit_id] = seq
+        return StateUpdateStatus.APPLIED
 
     def validate_action(self, action_data: dict, executor_peer_id: str) -> OwnershipStatus:
         """
