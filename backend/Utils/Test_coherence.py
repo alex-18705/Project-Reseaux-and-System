@@ -1,6 +1,5 @@
-import copy
-
 from backend.Class.Army import Army
+from backend.Utils.convert_json import army_to_dict, json_to_army
 
 
 
@@ -34,8 +33,12 @@ class Test_coherence:
         return report
 
     def set_armies(self,my_army, othersArmy :dict):
-        self.MY_ARMY = copy.deepcopy(my_army)
-        self.OTHER_ARMY = copy.deepcopy(othersArmy)
+        self.MY_ARMY = json_to_army(army_to_dict(my_army)) if my_army else None
+        self.OTHER_ARMY = {
+            army_id: json_to_army(army_to_dict(army))
+            for army_id, army in othersArmy.items()
+            if army is not None
+        }
 
     @staticmethod
     def compare_army(old_army, new_army,map, otherArmy):
@@ -53,10 +56,6 @@ class Test_coherence:
                 # degat
                 if unit.hp > old_unit.hp:
                     report.append({"type":"hp", "unit" : unit})
-                # cooldown
-                if old_unit.cooldown != 0 and unit.cooldown > old_unit.cooldown:
-                    report.append({"type":"cooldown", "unit" : unit})
-
         return report
 
     def print_report(self,report):

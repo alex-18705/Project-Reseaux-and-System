@@ -116,6 +116,10 @@ def main():
         "--spawn_slot", type=int, default=None,
         help="Deployment slot for online mode: 0=host side, 1/2/...=separate joiner lanes"
     )
+    run_parser.add_argument(
+        "--coherence_checks", action="store_true",
+        help="Enable lightweight periodic online coherence diagnostics"
+    )
 
     # ==================== TestOnline ====================
     run_parser = subparsers.add_parser("testOnline", help="Test online")
@@ -149,6 +153,7 @@ def main():
             spawn_slot=args.spawn_slot
         )
         gameMode.max_tick = args.ticks
+        gameMode.enable_coherence_checks = args.coherence_checks
 
         if args.join : gameMode.know_ip.add(args.join)
 

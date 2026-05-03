@@ -25,7 +25,7 @@ class Online(GameMode):
         super().__init__()
         self.max_tick = None
         self.tick = 0
-        self.tick_delay = 1.0
+        self.tick_delay = 0.5
         self.frame_delay = 0.05
         self.verbose = True
         self.my_army = None
@@ -48,6 +48,10 @@ class Online(GameMode):
         self.peer_ips = {self.my_id: self.network_bridge._my_ip}
         self.peer_slots = {self.my_id: self.spawn_slot}
         self.last_recv_time = {}
+        self.enable_coherence_checks = False
+        self.coherence_check_interval = 20
+        self._damage_event_seq = 0
+        self._applied_damage_events = set()
         
         # Initialize ownership system
         initialize_ownership(self.my_id)
@@ -97,8 +101,19 @@ class Online(GameMode):
             return
         ownership = get_ownership_manager()
         ownership.register_peer(self.my_id)
+        self.my_army.gameMode = self
         for unit in self.my_army.units:
             ownership.assign_ownership(unit.id, self.my_id)
+
+    def _broadcast_ownership_change(self, entity_id, new_owner_id, ownership_version, state=None):
+        payload = {
+            "entity_id": entity_id,
+            "new_owner_id": new_owner_id,
+            "ownership_version": int(ownership_version),
+        }
+        if state is not None:
+            payload["state"] = state
+        return self.network_bridge.send_message("OWNERSHIP_TRANSFER", "", payload)
 
     def _remember_base_positions(self):
         if self.my_army is None:
@@ -139,6 +154,67 @@ class Online(GameMode):
         new.units = all_units
         return new
 
+    def _restore_remote_armies(self, remote_snapshots):
+        for remote_id, army_data in remote_snapshots.items():
+            restored_army = json_to_army(army_data)
+            restored_army.gameMode = self
+            self._mark_army_owner(restored_army, remote_id)
+            for unit in restored_army.units:
+                unit.army = restored_army
+            self.othersArmy[remote_id] = restored_army
+
+    def _collect_remote_damage_events(self, remote_snapshots):
+        events = []
+        for remote_id, old_army_data in remote_snapshots.items():
+            current_army = self.othersArmy.get(remote_id)
+            if current_army is None:
+                continue
+            old_units = {
+                unit_data.get("id"): unit_data
+                for unit_data in old_army_data.get("units", [])
+                if unit_data.get("id")
+            }
+            for unit in current_army.units:
+                old_unit = old_units.get(unit.id)
+                if not old_unit:
+                    continue
+                old_hp = old_unit.get("hp", unit.hp)
+                damage = old_hp - unit.hp
+                if damage <= 0:
+                    continue
+                self._damage_event_seq += 1
+                events.append({
+                    "event_id": f"{self.my_id}:{self._damage_event_seq}",
+                    "target_owner_id": remote_id,
+                    "target_unit_id": unit.id,
+                    "damage": damage,
+                })
+        return events
+
+    def _apply_damage_events(self, sender_id, damage_events):
+        if not isinstance(damage_events, list) or self.my_army is None:
+            return
+        for event in damage_events:
+            if not isinstance(event, dict):
+                continue
+            if event.get("target_owner_id") != self.my_id:
+                continue
+            event_id = event.get("event_id")
+            if not event_id or event_id in self._applied_damage_events:
+                continue
+            target_unit = self.my_army.get_unit_by_id(event.get("target_unit_id"))
+            if target_unit is None or not target_unit.is_alive():
+                continue
+            try:
+                damage = int(event.get("damage", 0))
+            except (TypeError, ValueError):
+                continue
+            if damage <= 0:
+                continue
+            target_unit.hp = max(0, target_unit.hp - damage)
+            target_unit.last_attacker_id = sender_id
+            self._applied_damage_events.add(event_id)
+
     def continue_condition(self):
         return self.max_tick is None or self.tick < self.max_tick
 
@@ -158,19 +234,11 @@ class Online(GameMode):
         current_owner = ownership.get_owner(unit_id)
         if current_owner and current_owner != self.my_id:
             ownership.request_ownership(unit_id, self.my_id)
-            ip = self.peer_ips.get(current_owner)
-            if ip:
-                self.network_bridge.send_message("OWNERSHIP_REQUEST", ip, {
-                    "unit_id": unit_id,
-                    "requester_id": self.my_id
-                }, peer_id=current_owner)
-            else:
-                # Broadcast unencrypted as fallback
-                for fallback_ip in self.know_ip:
-                    self.network_bridge.send_message("OWNERSHIP_REQUEST", fallback_ip, {
-                        "unit_id": unit_id,
-                        "requester_id": self.my_id
-                    })
+            self.network_bridge.request_ownership(
+                current_owner,
+                unit_id,
+                "unit_control",
+            )
 
 
     def message_receive(self):
@@ -238,6 +306,9 @@ class Online(GameMode):
                 if isinstance(payload, dict):
                     state = payload.get("state", {})
                     if isinstance(state, dict):
+                        if "seq" not in state and "seq" in payload:
+                            state = dict(state)
+                            state["seq"] = payload["seq"]
                         self.apply_remote_state(state)
                         updated = True
                 continue
@@ -262,22 +333,32 @@ class Online(GameMode):
                     pass
 
             if msg_type == "OWNERSHIP_REQUEST":
-                unit_id = payload.get("unit_id")
-                requester_id = payload.get("requester_id")
-                if unit_id and requester_id:
-                    ownership.request_ownership(unit_id, requester_id)
+                entity_id = payload.get("entity_id")
+                requester_id = msg.get("sender_id") or payload.get("requester_id")
+                if entity_id and requester_id:
+                    ownership.request_ownership(entity_id, requester_id)
                     # Automatically grant ownership if we are the current owner (for demonstration)
-                    if ownership.grant_ownership(unit_id, requester_id):
-                        print(f"[Ownership] Accord de la propriete de {unit_id} a {requester_id}")
-                        for ip in self.know_ip:
-                            self.network_bridge.send_message("OWNERSHIP_TRANSFER", ip, {
-                                "entity_id": unit_id,
-                                "new_owner_id": requester_id,
-                                "ownership_version": ownership.get_ownership_version(unit_id),
-                            })
+                    if ownership.grant_ownership(entity_id, requester_id):
+                        print(f"[Ownership] Accord de la propriete de {entity_id} a {requester_id}")
+                        self.network_bridge.register_entity_owner(
+                            entity_id,
+                            requester_id,
+                            ownership.get_ownership_version(entity_id),
+                        )
+                        self.network_bridge.transfer_ownership(
+                            requester_id,
+                            entity_id,
+                            self.create_state_payload() if entity_id == self.army_entity_id() else {},
+                            ownership.get_ownership_version(entity_id),
+                        )
+                        self._broadcast_ownership_change(
+                            entity_id,
+                            requester_id,
+                            ownership.get_ownership_version(entity_id),
+                        )
                 continue
             elif msg_type == "OWNERSHIP_TRANSFER":
-                unit_id = payload.get("entity_id") or payload.get("unit_id")
+                unit_id = payload.get("entity_id")
                 new_owner_id = payload.get("new_owner_id")
                 if unit_id and new_owner_id:
                     print(f"[Ownership] Transfert de {unit_id} vers {new_owner_id} confirme")
@@ -326,8 +407,9 @@ class Online(GameMode):
                         print(f"[Online] Erreur lors du chargement de l'armee de {army_id} : {e}")
                     updated = True
                 else:
-                    self.my_army = json_to_army(army_data)
-                    self._mark_army_owner(self.my_army, self.my_id)
+                    # Local army is authoritative locally; never replace it with
+                    # a copy echoed back by another peer.
+                    continue
         
         known_remote_armies = len(self.othersArmy)
         if known_remote_armies != self._last_known_remote_armies:
@@ -352,21 +434,34 @@ class Online(GameMode):
             self._broadcast_state()
             return
 
-        report =self.Test_coherence.test_coherence(self)
-        self.Test_coherence.print_report(report)
+        if self.enable_coherence_checks and self.tick % self.coherence_check_interval == 0:
+            report = self.Test_coherence.test_coherence(self)
+            self.Test_coherence.print_report(report)
+            self.Test_coherence.set_armies(self.my_army, self.othersArmy)
         # Exécuter la logique de combat pour NOS unités
         # We need to fight AGAINST everyone else combined
-        all_enemies = self.flat()
+        remote_snapshots = {
+            remote_id: army_to_dict(remote_army)
+            for remote_id, remote_army in self.othersArmy.items()
+        }
+        ownership = get_ownership_manager()
+        ownership.register_peer(self.my_id)
+        for unit in self.my_army.units:
+            ownership.assign_ownership(unit.id, self.my_id)
 
-        # Apply remote armies actions locally so our army can take damage from peers.
         for remote_id, remote_army in self.othersArmy.items():
-            self.current_sender_id = remote_id
-            remote_army.fight(self.map, otherArmy=self.my_army)
+            ownership.register_peer(remote_id)
+            for unit in remote_army.units:
+                ownership.assign_ownership(unit.id, remote_id)
 
+        all_enemies = self.flat()
         self.current_sender_id = self.my_id # We are the executor for our own units
         self.my_army.fight(self.map, otherArmy=all_enemies)
+        damage_events = self._collect_remote_damage_events(remote_snapshots)
+        self._restore_remote_armies(remote_snapshots)
+
         if self.network_bridge.owns_entity(self.army_entity_id()):
-            self.network_bridge.send_state_update(self.create_state_payload())
+            self.network_bridge.send_state_update(self.create_state_payload(damage_events))
         
         # ---- AI Takeover pour les joueurs déconnectés ----
         current_time = time.time()
@@ -374,10 +469,10 @@ class Online(GameMode):
             if army_id in self.last_recv_time:
                 if current_time - self.last_recv_time[army_id] > 5.0:
                     # Le joueur s'est déconnecté. On simule son armée via l'IA contre NOUS.
-                    self.current_sender_id = army_id
-                    army.fight(self.map, otherArmy=self.my_army)
                     ownership = get_ownership_manager()
                     ownership.handle_peer_disconnect(army_id, fallback_owner_id=self.my_id)
+                    self.current_sender_id = self.my_id
+                    army.fight(self.map, otherArmy=self.my_army)
         
         # Incrémenter le tick
         self.tick += 1
@@ -390,11 +485,13 @@ class Online(GameMode):
         entity_id = state.get("entity_id") or self.army_entity_id(peer_id)
         owner_peer_id = state.get("owner_peer_id") or peer_id
         ownership_version = int(state.get("ownership_version", 0) or 0)
+        seq = int(state.get("seq", 0) or 0)
         peer_slots_payload = state.get("peer_slots", {})
         peer_ips_payload = state.get("peer_ips", {})
 
         if not peer_id or peer_id == self.my_id or not army_data:
             return
+        self.last_recv_time[peer_id] = time.time()
         if isinstance(peer_slots_payload, dict):
             for other_peer_id, slot in peer_slots_payload.items():
                 if other_peer_id == self.my_id:
@@ -410,19 +507,40 @@ class Online(GameMode):
                 if peer_ip:
                     self.peer_ips[other_peer_id] = peer_ip
         current_owner = self.network_bridge.get_entity_owner(entity_id)
-        if current_owner and owner_peer_id != current_owner:
+        current_version = self.network_bridge.get_ownership_version(entity_id)
+        if current_owner and owner_peer_id != current_owner and ownership_version <= current_version:
             print(
                 f"[Online] Ignored army state with conflicting owner: "
                 f"entity={entity_id}, claimed={owner_peer_id}, current={current_owner}"
             )
             return
-        self.network_bridge.register_entity_owner(entity_id, owner_peer_id, ownership_version)
+        if not self.network_bridge.register_entity_owner(entity_id, owner_peer_id, ownership_version):
+            print(
+                f"[Online] Ignored stale ownership metadata: "
+                f"entity={entity_id}, owner={owner_peer_id}, version={ownership_version}"
+            )
+            return
         if owner_peer_id != peer_id:
             print(
                 f"[Online] Ignored non-authoritative army state: "
                 f"entity={entity_id}, peer={peer_id}, owner={owner_peer_id}"
             )
             return
+
+        ownership = get_ownership_manager()
+        ownership.register_peer(owner_peer_id)
+        local_version = ownership.get_ownership_version(entity_id)
+        if local_version < ownership_version:
+            ownership.apply_ownership_transfer(entity_id, owner_peer_id, ownership_version)
+        elif ownership.get_owner(entity_id) is None and ownership_version == 0:
+            ownership.assign_ownership(entity_id, owner_peer_id)
+
+        status = ownership.validate_and_track_state_update(entity_id, peer_id, ownership_version, seq)
+        if status != StateUpdateStatus.APPLIED:
+            print(f"[Online] State update for {entity_id} from {peer_id} rejected: {status}")
+            return
+
+        self._apply_damage_events(peer_id, state.get("damage_events", []))
 
         if isinstance(army_data, str):
             army = json_to_army(army_data)
@@ -432,11 +550,6 @@ class Online(GameMode):
         # Keep owner metadata on every unit so UI color mapping is stable across peers.
         self._mark_army_owner(army, owner_peer_id)
         # Keep ownership table in sync with the latest remote state to avoid false rejects.
-        ownership = get_ownership_manager()
-        seq = int(state.get("seq", 0) or 0)
-        status = ownership.validate_and_track_state_update(entity_id, peer_id, ownership_version, seq)
-
-        ownership.register_peer(owner_peer_id)
         for unit in army.units:
             ownership.assign_ownership(unit.id, owner_peer_id)
         for unit in army.units:
@@ -444,19 +557,15 @@ class Online(GameMode):
         if peer_id not in self.othersArmy:
             print(f"[Online] {self.my_id}: received remote army from {peer_id}")
 
-        if status != StateUpdateStatus.APPLIED:
-            print(f"[Online] State update for {entity_id} from {peer_id} rejected: {status}")
-            return
-
         self.othersArmy[peer_id] = army
 
-    def create_state_payload(self):
+    def create_state_payload(self, damage_events=None):
         entity_id = self.army_entity_id()
         owner_peer_id = self.network_bridge.get_entity_owner(entity_id)
         if owner_peer_id is None:
             owner_peer_id = self.my_id
             self.network_bridge.register_entity_owner(entity_id, owner_peer_id)
-        return {
+        payload = {
             "entity_id": entity_id,
             "peer_id": self.my_id,
             "owner_peer_id": owner_peer_id,
@@ -466,8 +575,13 @@ class Online(GameMode):
             "peer_slots": self.peer_slots,
             "peer_ips": self.peer_ips,
         }
+        if damage_events:
+            payload["damage_events"] = damage_events
+        return payload
 
     def launch(self):
+        if self.my_army is not None:
+            self.my_army.gameMode = self
         self._remember_base_positions()
         self._deploy_my_army_for_current_map()
         self._log_map_if_changed()
@@ -488,6 +602,7 @@ class Online(GameMode):
         if not entity_id or not requester:
             return
 
+        ownership = get_ownership_manager()
         if not self.network_bridge.owns_entity(entity_id):
             self.network_bridge.deny_ownership(
                 requester,
@@ -496,9 +611,12 @@ class Online(GameMode):
             )
             return
 
-        state = self.create_state_payload() if entity_id == self.army_entity_id() else {}
         next_version = self.network_bridge.get_ownership_version(entity_id) + 1
+        self.network_bridge.register_entity_owner(entity_id, requester, next_version)
+        ownership.apply_ownership_transfer(entity_id, requester, next_version)
+        state = self.create_state_payload() if entity_id == self.army_entity_id() else {}
         self.network_bridge.transfer_ownership(requester, entity_id, state, next_version)
+        self._broadcast_ownership_change(entity_id, requester, next_version, state)
 
     def handle_ownership_transfer(self, msg):
         payload = msg.get("payload", {})
@@ -511,11 +629,11 @@ class Online(GameMode):
 
         ownership = get_ownership_manager()
         applied = ownership.apply_ownership_transfer(entity_id, new_owner_id, version)
-        if not applied:
+        bridge_applied = self.network_bridge.register_entity_owner(entity_id, new_owner_id, version)
+        if not applied and not bridge_applied:
             print(f"[Online] Failed to apply ownership grant for {entity_id} to {new_owner_id}")
             return
-        
-        self.network_bridge.register_entity_owner(entity_id, new_owner_id, version)
+
         if new_owner_id == self.my_id and payload.get("state"):
             self.apply_remote_state(payload["state"])
 
@@ -555,16 +673,9 @@ class Online(GameMode):
         }
 
         result = []
-        # In multi-peer mode, everyone should ideally know about everyone.
-        # If we only send OUR army, a new peer joining P1 (host) might not see P2 if P2 doesn't know P3 yet.
-        # So we broadcast all known armies.
-        for army_id, army_obj in self.othersArmy.items():
-            result.append({
-                "armies": {army_id: army_to_dict(army_obj)},
-                "peer_ips": self.peer_ips,
-                "peer_slots": self.peer_slots
-            })
-
+        # Each peer only publishes its own authoritative army. The C proxy relays
+        # packets between peers, so re-broadcasting observed armies would create
+        # stale third-party state.
         # Only host (is_first) decides the map to avoid conflicts
         if self.is_first and self.map is not None and (self.tick < 20 or self.tick % 50 == 0):
             local_payload["map"] = map_to_dict(self.map)

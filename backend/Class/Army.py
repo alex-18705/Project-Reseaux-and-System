@@ -193,9 +193,13 @@ class Army:
                 unit.last_attacked_id = "heal"
             # Monk convert
             elif action.kind == "conversion":
+                if self.gameMode and hasattr(self.gameMode, "network_bridge"):
+                    continue
                 if target in otherArmy.living_units():
                     otherArmy.remove_unit(target)
                     self.add_unit(target)
+                    if ownership and self.gameMode and hasattr(self.gameMode, "current_sender_id"):
+                        ownership.assign_ownership(target.id, self.gameMode.current_sender_id)
                     unit.cooldown = unit.reload_time
                     target.last_attacker_id = None
                     target.last_attacked_id = None
