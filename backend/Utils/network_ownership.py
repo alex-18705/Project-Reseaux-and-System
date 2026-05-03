@@ -90,6 +90,15 @@ class OwnershipManager:
         if self._pending_requests.get(unit_id) == new_owner_id:
             del self._pending_requests[unit_id]
 
+    def handle_ownership_denied(self, unit_id: str, requester_id: str) -> bool:
+        """Handles a denial of ownership request."""
+        if not unit_id or not requester_id:
+            return False
+        if self._pending_requests.get(unit_id) == requester_id:
+            del self._pending_requests[unit_id]
+            return True
+        return False
+    
     def apply_ownership_transfer(self, unit_id: str, new_owner_id: str, incoming_version: int) -> bool:
         """
         Applies ownership transfer only if incoming_version is strictly newer.
@@ -111,6 +120,9 @@ class OwnershipManager:
             del self._pending_requests[unit_id]
         return True
 
+    def apply_ownership_return(self, unit_id: str, returning_owner_id: str, incoming_version: int) -> bool:
+        return self.apply_ownership_transfer(unit_id, returning_owner_id, incoming_version)
+    
     def validate_and_track_state_update(
         self,
         unit_id: str,
@@ -165,6 +177,23 @@ class OwnershipManager:
             return OwnershipStatus.AUTHORIZED
         
         return OwnershipStatus.DENIED_NOT_OWNER
+    
+    def handle_peer_disconnect(self, peer_id: str, fallback_owner_id: Optional[str] = None) -> int:
+        """Handles cleanup when a peer disconnects. Optionally reassigns ownership to fallback_owner_id."""
+        moved = 0
+        if fallback_owner_id and fallback_owner_id not in self._registered_peers:
+            self.register_peer(fallback_owner_id)
+        for unit_id, owner in list(self._unit_to_peer.items()):
+            if owner != peer_id:
+                continue
+            if fallback_owner_id:
+                self.assign_ownership(unit_id, fallback_owner_id)
+            else:
+                self._unit_to_peer[unit_id] = ""
+            self._ownership_version[unit_id] = self.get_ownership_version(unit_id) + 1
+            self._last_state_seq[unit_id] = -1
+            moved += 1
+        return moved
 
 # Singleton-like access for the current game session
 _instance: Optional[OwnershipManager] = None
